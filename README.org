@@ -1,0 +1,26 @@
+* ELISA
+
+[[http://www.gnu.org/licenses/gpl-3.0.txt][file:https://img.shields.io/badge/license-GPL_3-green.svg]]
+
+ELISA (Emacs Lisp Information System Assistant) is a project
+designed to help Emacs users quickly find answers to their
+questions related to Emacs and Emacs Lisp. Utilizing the powerful
+Ellama package, ELISA provides accurate and relevant responses to
+user queries, enhancing productivity and efficiency in the Emacs
+environment. By integrating links to the Emacs info manual after
+answering a question, ELISA ensures that users have easy access to
+additional information on the topic, making it an essential tool
+for both beginners and advanced Emacs users.
+
+** Installation
+
+** Commands
+
+** Configuration
+
+** Contributions
+
+To contribute, submit a pull request or report a bug. This library is
+planned to be part of GNU ELPA; major contributions must be from
+someone with FSF papers. Alternatively, you can write a module and
+share it on a different archive like MELPA.
