@@ -16,7 +16,48 @@ for both beginners and advanced Emacs users.
 
 ** Commands
 
+*** elisa-chat
+
+Entrypoint. Makes similarity search in index, add semantically similar
+info nodes into context and query llm for prompt. Uses ~ellama~ under
+the hood. Call one of parse manuals functions to create index before
+use it.
+
+*** elisa-download-sqlite-vss
+
+Download [[https://github.com/asg017/sqlite-vss][sqlite vss]] extension to provide similarity search. Will be
+called automatically if needed.
+
+*** elisa-async-parse-builtin-manuals
+
+Parse builtin emacs info manuals asyncronously. Can take long time.
+
+*** elisa-async-parse-external-manuals
+
+Parse external emacs info manuals asyncronously.
+
+*** elisa-async-parse-all-manuals
+
+Parse all emacs info manuals asyncronously.
+
+One of parse functions should be called before ~elisa-chat~ to create
+index.
+
 ** Configuration
+
+Example configuration. I use [[https://github.com/toshsan/embedding-server][toshsan/embedding-server]] for embeddings.
+
+#+begin_src emacs-lisp
+  (use-package elisa
+  :init
+  (setopt elisa-embeddings-provider (progn
+				      (require 'llm-openai)
+				      (setq llm-warn-on-nonfree nil)
+				      (make-llm-openai-compatible
+				       :embedding-model "all-MiniLM-L6-v2"
+				       :url "http://localhost:8000/v1"
+				       :key "YOUR_KEY"))))
+#+end_src
 
 ** Contributions
 
