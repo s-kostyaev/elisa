@@ -251,6 +251,12 @@
   (elisa-parse-builtin-manuals)
   (elisa-parse-external-manuals))
 
+(defun elisa--reopen-db ()
+  "Reopen database."
+  (let ((db (sqlite-open (file-name-concat elisa-db-directory "elisa.sqlite"))))
+    (elisa--init-db db)
+    (setq elisa-db db)))
+
 ;;;###autoload
 (defun elisa-async-parse-builtin-manuals ()
   "Parse builtin manuals asyncronously."
@@ -262,6 +268,8 @@
 		  (require 'elisa)
 		  (elisa-parse-builtin-manuals))
 	       (lambda (_)
+		 (sqlite-close elisa-db)
+		 (elisa--reopen-db)
 		 (message "Builtin manuals parsing done."))))
 
 ;;;###autoload
@@ -275,6 +283,8 @@
 		  (require 'elisa)
 		  (elisa-parse-external-manuals))
 	       (lambda (_)
+		 (sqlite-close elisa-db)
+		 (elisa--reopen-db)
 		 (message "External manuals parsing done."))))
 
 ;;;###autoload
@@ -288,6 +298,8 @@
 		  (require 'elisa)
 		  (elisa-parse-all-manuals))
 	       (lambda (_)
+		 (sqlite-close elisa-db)
+		 (elisa--reopen-db)
 		 (message "Manuals parsing done."))))
 
 ;;;###autoload
