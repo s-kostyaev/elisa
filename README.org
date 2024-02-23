@@ -39,6 +39,14 @@ example:
 - other [[https://ollama.com/library][models]] or [[https://github.com/ahyatt/llm?tab=readme-ov-file#setting-up-providers][providers]]
 - [[https://github.com/ollama/ollama?tab=readme-ov-file#create-a-model][create your own model]]
 
+Create index for builtin, external or all info manuals by one of this
+commands:
+- ~elisa-async-parse-builtin-manuals~
+- ~elisa-async-parse-external-manuals~
+- ~elisa-async-parse-all-manuals~
+
+This can take some time.
+
 ** Commands
 
 *** elisa-chat
