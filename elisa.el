@@ -42,7 +42,8 @@
 (require 'info)
 (require 'async)
 
-(defcustom elisa-embeddings-provider nil
+(defcustom elisa-embeddings-provider (progn (require 'llm-ollama)
+					    (make-llm-ollama :embedding-model "nomic-embed-text"))
   "Embeddings provider to generate embeddings."
   :group 'tools
   :type '(sexp :validate 'cl-struct-p))
@@ -54,7 +55,7 @@
   :group 'tools
   :type 'directory)
 
-(defcustom elisa-limit 7
+(defcustom elisa-limit 5
   "Count info nodes to pass into llm context for answer."
   :group 'tools
   :type 'integer)
