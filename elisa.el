@@ -256,10 +256,11 @@
   "Parse builtin manuals asyncronously."
   (interactive)
   (message "Begin parsing builtin manuals.")
-  (async-start (lambda ()
-		 (package-initialize)
-		 (require 'elisa)
-		 (elisa-parse-builtin-manuals))
+  (async-start `(lambda ()
+		  ,(async-inject-variables "elisa-embeddings-provider")
+		  (package-initialize)
+		  (require 'elisa)
+		  (elisa-parse-builtin-manuals))
 	       (lambda (_)
 		 (message "Builtin manuals parsing done."))))
 
@@ -268,10 +269,11 @@
   "Parse external manuals asyncronously."
   (interactive)
   (message "Begin parsing external manuals.")
-  (async-start (lambda ()
-		 (package-initialize)
-		 (require 'elisa)
-		 (elisa-parse-external-manuals))
+  (async-start `(lambda ()
+		  ,(async-inject-variables "elisa-embeddings-provider")
+		  (package-initialize)
+		  (require 'elisa)
+		  (elisa-parse-external-manuals))
 	       (lambda (_)
 		 (message "External manuals parsing done."))))
 
@@ -280,10 +282,11 @@
   "Parse all manuals asyncronously."
   (interactive)
   (message "Begin parsing manuals.")
-  (async-start (lambda ()
-		 (package-initialize)
-		 (require 'elisa)
-		 (elisa-parse-all-manuals))
+  (async-start `(lambda ()
+		  ,(async-inject-variables "elisa-embeddings-provider")
+		  (package-initialize)
+		  (require 'elisa)
+		  (elisa-parse-all-manuals))
 	       (lambda (_)
 		 (message "Manuals parsing done."))))
 
