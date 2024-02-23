@@ -32,7 +32,12 @@ you need to install [[https://github.com/jmorganca/ollama][ollama]] and pull use
 
 Second model is just [[https://ollama.com/library/openchat][openchat]] with exactly 2 tweaks: context window
 extended to 8k and temperature set to 0 to better usage for RAG
-(Retrieval Augmented Generation).
+(Retrieval Augmented Generation). You can try other models, for
+example:
+- [[https://ollama.com/library/all-minilm][all-minilm]] for embeddings
+- [[sskostyaev/mistral:32k-rag][mistral:32k-rag]] for chat
+- other [[https://ollama.com/library][models]] or [[https://github.com/ahyatt/llm?tab=readme-ov-file#setting-up-providers][providers]]
+- [[https://github.com/ollama/ollama?tab=readme-ov-file#create-a-model][create your own model]]
 
 ** Commands
 
@@ -77,6 +82,16 @@ Example configuration. With default installation you don't need it.
 				 :chat-model "sskostyaev/openchat:8k-rag"
 				 :embedding-model "nomic-embed-text")))
 #+end_src
+
+The following variables can be customized for ELISA:
+- ~elisa-embeddings-provider~: Embeddings provider to generate
+  embeddings.
+- ~elisa-chat-provider~: Chat provider.
+- ~elisa-db-directory~: Directory for elisa database.
+- ~elisa-limit~: Count info nodes to pass into llm context for answer.
+- ~elisa-find-executable~: Path to find executable.
+- ~elisa-tar-executable~: Path to tar executable.
+- ~elisa-sqlite-vss-version~: Sqlite VSS version.
 
 ** Contributions
 
