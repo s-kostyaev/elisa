@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.8.5") (llm "0.9.1") (async "1.9.8"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.8.6") (llm "0.9.1") (async "1.9.8"))
 ;; Version: 0.1.0
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -43,8 +43,17 @@
 (require 'async)
 
 (defcustom elisa-embeddings-provider (progn (require 'llm-ollama)
-					    (make-llm-ollama :embedding-model "nomic-embed-text"))
+					    (make-llm-ollama
+					     :embedding-model "nomic-embed-text"))
   "Embeddings provider to generate embeddings."
+  :group 'tools
+  :type '(sexp :validate 'cl-struct-p))
+
+(defcustom elisa-chat-provider (progn (require 'llm-ollama)
+				      (make-llm-ollama
+				       :chat-model "sskostyaev/openchat:8k-rag"
+				       :embedding-model "nomic-embed-text"))
+  "Chat provider."
   :group 'tools
   :type '(sexp :validate 'cl-struct-p))
 
@@ -309,7 +318,7 @@
   (interactive "sAsk elisa: ")
   (let ((infos (elisa-find-similar prompt)))
     (mapc #'ellama-context-add-info-node infos)
-    (ellama-chat prompt)))
+    (ellama-chat prompt nil :provider elisa-chat-provider)))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
