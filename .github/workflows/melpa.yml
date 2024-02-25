@@ -27,7 +27,9 @@ jobs:
         warnings_as_errors:
           - false
         check:
-          - melpa
+          - byte-compile
+          - checkdoc
+          - package-lint
         file:
           - elisa.el
     # Steps represent a sequence of tasks that will be executed as part of the job
