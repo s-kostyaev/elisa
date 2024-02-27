@@ -274,50 +274,42 @@
     (elisa--init-db db)
     (setq elisa-db db)))
 
+(defun elisa--async-do-parse (func)
+  "Parse asyncronously with FUNC."
+  (async-start `(lambda ()
+		  ,(async-inject-variables "elisa-embeddings-provider")
+		  ,(async-inject-variables "elisa-db-directory")
+		  ,(async-inject-variables "elisa-find-executable")
+		  ,(async-inject-variables "elisa-tar-executable")
+		  ,(async-inject-variables "load-path")
+		  (require 'elisa)
+		  (,func))
+	       (lambda (_)
+		 (sqlite-close elisa-db)
+		 (elisa--reopen-db)
+		 (message "%s done."
+			  func))))
+
 ;;;###autoload
 (defun elisa-async-parse-builtin-manuals ()
   "Parse builtin manuals asyncronously."
   (interactive)
   (message "Begin parsing builtin manuals.")
-  (async-start `(lambda ()
-		  ,(async-inject-variables "elisa-embeddings-provider")
-		  (package-initialize)
-		  (require 'elisa)
-		  (elisa-parse-builtin-manuals))
-	       (lambda (_)
-		 (sqlite-close elisa-db)
-		 (elisa--reopen-db)
-		 (message "Builtin manuals parsing done."))))
+  (elisa--async-do-parse 'elisa-parse-builtin-manuals))
 
 ;;;###autoload
 (defun elisa-async-parse-external-manuals ()
   "Parse external manuals asyncronously."
   (interactive)
   (message "Begin parsing external manuals.")
-  (async-start `(lambda ()
-		  ,(async-inject-variables "elisa-embeddings-provider")
-		  (package-initialize)
-		  (require 'elisa)
-		  (elisa-parse-external-manuals))
-	       (lambda (_)
-		 (sqlite-close elisa-db)
-		 (elisa--reopen-db)
-		 (message "External manuals parsing done."))))
+  (elisa--async-do-parse 'elisa-parse-external-manuals))
 
 ;;;###autoload
 (defun elisa-async-parse-all-manuals ()
   "Parse all manuals asyncronously."
   (interactive)
   (message "Begin parsing manuals.")
-  (async-start `(lambda ()
-		  ,(async-inject-variables "elisa-embeddings-provider")
-		  (package-initialize)
-		  (require 'elisa)
-		  (elisa-parse-all-manuals))
-	       (lambda (_)
-		 (sqlite-close elisa-db)
-		 (elisa--reopen-db)
-		 (message "Manuals parsing done."))))
+  (elisa--async-do-parse 'elisa-parse-all-manuals))
 
 ;;;###autoload
 (defun elisa-chat (prompt)
