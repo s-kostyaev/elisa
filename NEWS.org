@@ -1,2 +1,4 @@
+* Version 0.1.1
+- Refactor asyncronous parsing to fix alterantive installation ways.
 * Version 0.1.0
 - Initial release.
