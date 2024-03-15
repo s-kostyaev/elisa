@@ -28,6 +28,10 @@ archives soon. For now you can use ~package-vc~ to install ELISA:
   (package-vc-install "https://github.com/s-kostyaev/elisa")
 #+end_src
 
+Then you need to download ~sqlite-vss~. You can do it manually from
+https://github.com/asg017/sqlite-vss/releases or by calling ~M-x~
+~elisa-download-sqlite-vss~.
+
 You can use this package with different llm providers. By default it
 uses [[https://github.com/jmorganca/ollama][ollama]] provider both for embeddings and chat. If you ok with it,
 you need to install [[https://github.com/jmorganca/ollama][ollama]] and pull used models:
