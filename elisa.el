@@ -139,7 +139,8 @@
     (make-directory elisa-db-directory t)
     (url-copy-file (elisa-sqlite-vss-download-url) file-name t)
     (process-lines elisa-tar-executable "-xf" file-name)
-    (delete-file file-name)))
+    (delete-file file-name))
+  (elisa--reopen-db))
 
 (defun elisa-get-embedding-size ()
   "Get embedding size."
