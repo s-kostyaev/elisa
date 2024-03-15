@@ -156,16 +156,16 @@
 
 (defun elisa--init-db (db)
   "Initialize elisa DB."
-  (when (not (file-exists-p (elisa--vss-path)))
-    (elisa-download-sqlite-vss))
-  (sqlite-load-extension
-   db
-   (elisa--vector-path))
-  (sqlite-load-extension
-   db
-   (elisa--vss-path))
-  (sqlite-execute db (elisa-embeddings-create-table-sql))
-  (sqlite-execute db (elisa-info-create-table-sql)))
+  (if (not (file-exists-p (elisa--vss-path)))
+      (warn "Please run M-x `elisa-download-sqlite-vss' to use this package")
+    (sqlite-load-extension
+     db
+     (elisa--vector-path))
+    (sqlite-load-extension
+     db
+     (elisa--vss-path))
+    (sqlite-execute db (elisa-embeddings-create-table-sql))
+    (sqlite-execute db (elisa-info-create-table-sql))))
 
 (defvar elisa-db (progn
 		   (make-directory elisa-db-directory t)
