@@ -1,3 +1,5 @@
+* Version 0.1.3
+- Improve built-in manuals directory location method.
 * Version 0.1.2
 - Warn user instead of network call during package loading.
 * Version 0.1.1

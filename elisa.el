@@ -6,7 +6,7 @@
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
 ;; Package-Requires: ((emacs "29.2") (ellama "0.8.6") (llm "0.9.1") (async "1.9.8"))
-;; Version: 0.1.2
+;; Version: 0.1.3
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
 
@@ -240,7 +240,7 @@
     (lambda (s) (string-suffix-p ".info" s))
     (directory-files (with-temp-buffer
 		       (info "emacs" (current-buffer))
-		       default-directory)))))
+		       (file-name-directory Info-current-file))))))
 
 (defun elisa-get-external-manuals ()
   "Get external manual names list."

@@ -1,6 +1,7 @@
 * ELISA
 
 [[http://www.gnu.org/licenses/gpl-3.0.txt][file:https://img.shields.io/badge/license-GPL_3-green.svg]]
+[[https://melpa.org/#/elisa][file:https://melpa.org/packages/elisa-badge.svg]]
 
 ELISA (Emacs Lisp Information System Assistant) is a project
 designed to help Emacs users quickly find answers to their
@@ -21,12 +22,20 @@ manuals by provided links.
 
 ** Installation
 
-You need emacs 29.2 or newer to use this package. Will be on package
-archives soon. For now you can use ~package-vc~ to install ELISA:
+You need emacs 29.2 or newer to use this package.
+
+This package now on [[https://melpa.org/#/getting-started][MELPA]] and you can just ~M-x~ ~package-install~
+~elisa~.
+
+*** Alternative method
+
+You can use ~package-vc~ to install ELISA:
 
 #+begin_src emacs-lisp
   (package-vc-install "https://github.com/s-kostyaev/elisa")
 #+end_src
+
+*** System dependencies
 
 Then you need to download ~sqlite-vss~. You can do it manually from
 https://github.com/asg017/sqlite-vss/releases or by calling ~M-x~
