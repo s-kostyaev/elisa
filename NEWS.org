@@ -1,3 +1,5 @@
+* Version 0.1.4
+- Search for gzipped builtin manuals.
 * Version 0.1.3
 - Improve built-in manuals directory location method.
 * Version 0.1.2
