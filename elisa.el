@@ -48,6 +48,7 @@
 (require 'llm)
 (require 'info)
 (require 'async)
+(require 'dom)
 
 (defcustom elisa-embeddings-provider (progn (require 'llm-ollama)
 					    (make-llm-ollama
@@ -316,6 +317,30 @@ closer it is to 1, the more similar it is."
      #'string-empty-p
      (mapcar #'string-trim
 	     (nreverse result)))))
+
+(defun elisa-search-duckduckgo (prompt)
+  "Search duckduckgo for PROMPT and return list of urls."
+  (let* ((url (format "https://duckduckgo.com/html/?q=%s" (url-hexify-string prompt)))
+	 (buffer-name (url-retrieve-synchronously url t)))
+    (with-current-buffer buffer-name
+      (goto-char (point-min))
+      (search-forward "<!DOCTYPE")
+      (beginning-of-line)
+      (cl-remove-if
+       #'string-empty-p
+       (cl-remove-duplicates
+	(mapcar
+	 (lambda (el)
+	   (when el
+	     (string-trim-right
+	      (url-unhex-string
+	       (cdar (url-parse-args (or (dom-attr el 'href) ""))))
+	      "[&\\?].*")))
+	 (dom-by-tag
+	  (libxml-parse-html-region
+	   (point) (point-max))
+	  'a))
+	:test 'string-equal)))))
 
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
