@@ -91,6 +91,11 @@
   :group 'tools
   :type 'string)
 
+(defcustom elisa-semantic-split-threshold 0.6
+  "Cosine similarity threshold for semantic splitting."
+  :group 'tools
+  :type 'float)
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
   (cond  ((string-equal system-type "darwin")
@@ -232,6 +237,86 @@
        (elisa-vector-to-sqlite embedding)
        elisa-limit)))))
 
+(defun elisa--split-by (func)
+  "Split buffer content to list by FUNC."
+  (let ((pt (point-min))
+	(result nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (< (point) (point-max))
+	(funcall func)
+	(push (buffer-substring-no-properties pt (point)) result)
+	(setq pt (point)))
+      (nreverse (cl-remove-if #'string-empty-p result)))))
+
+(defun elisa--split-by-sentence ()
+  "Split byffer to list of sentences."
+  (elisa--split-by #'forward-sentence))
+
+(defun elisa--split-by-paragraph ()
+  "Split buffer to list of paragraphs."
+  (elisa--split-by #'forward-paragraph))
+
+(defun elisa-dot-product (v1 v2)
+  "Calculate the dot produce of vectors V1 and V2."
+  (let ((result 0))
+    (dotimes (i (length v1))
+      (setq result (+ result (* (aref v1 i) (aref v2 i)))))
+    result))
+
+(defun elisa-magnitude (v)
+  "Calculate magnitude of vector V."
+  (let ((sum 0))
+    (dotimes (i (length v))
+      (setq sum (+ sum (* (aref v i) (aref v i)))))
+    (sqrt sum)))
+
+(defun elisa-cosine-similarity (v1 v2)
+  "Calculate the cosine similarity of V1 and V2.
+The return is a floating point number between 0 and 1, where the
+closer it is to 1, the more similar it is."
+  (let ((dot-product (elisa-dot-product v1 v2))
+        (v1-magnitude (elisa-magnitude v1))
+        (v2-magnitude (elisa-magnitude v2)))
+    (if (and v1-magnitude v2-magnitude)
+        (/ dot-product (* v1-magnitude v2-magnitude))
+      0)))
+
+(defun elisa--similarities (list)
+  "Calculate cosine similarities between neighbour elements in LIST."
+  (let ((head (car list))
+	(tail (cdr list))
+	(result nil))
+    (while tail
+      (push (elisa-cosine-similarity head (car tail)) result)
+      (setq head (car tail))
+      (setq tail (cdr tail)))
+    (nreverse result)))
+
+(defun elisa-split-semantically ()
+  "Split buffer data semantically."
+  (let* ((paragraphs (elisa--split-by-paragraph))
+	 (embeddings (mapcar (lambda (s)
+			       (llm-embedding elisa-embeddings-provider s))
+			     paragraphs))
+	 (similarities (elisa--similarities embeddings))
+	 (result nil)
+	 (current (car paragraphs))
+	 (tail (cdr paragraphs)))
+    (mapc
+     (lambda (el)
+       (if (> el elisa-semantic-split-threshold)
+	   (setq current (concat current (car tail)))
+	 (push current result)
+	 (setq current (car tail)))
+       (setq tail (cdr tail)))
+     similarities)
+    (push current result)
+    (cl-remove-if
+     #'string-empty-p
+     (mapcar #'string-trim
+	     (nreverse result)))))
+
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
   (mapcar
@@ -283,6 +368,7 @@
 		  ,(async-inject-variables "elisa-db-directory")
 		  ,(async-inject-variables "elisa-find-executable")
 		  ,(async-inject-variables "elisa-tar-executable")
+		  ,(async-inject-variables "elisa-semantic-split-threshold")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
