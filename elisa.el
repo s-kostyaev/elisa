@@ -237,7 +237,8 @@
   (mapcar
    #'file-name-base
    (cl-remove-if-not
-    (lambda (s) (string-suffix-p ".info" s))
+    (lambda (s) (or (string-suffix-p ".info" s)
+		    (string-suffix-p ".info.gz" s)))
     (directory-files (with-temp-buffer
 		       (info "emacs" (current-buffer))
 		       (file-name-directory Info-current-file))))))
