@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.8.6") (llm "0.9.1") (async "1.9.8"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.9.3") (llm "0.9.1") (async "1.9.8"))
 ;; Version: 0.1.4
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -92,10 +92,24 @@
   :group 'tools
   :type 'string)
 
-(defcustom elisa-semantic-split-threshold 0.6
+(defcustom elisa-semantic-split-threshold 0.6 ;; 0.6 for paragraphs, 0.22 for sentences
   "Cosine similarity threshold for semantic splitting."
   :group 'tools
   :type 'float)
+
+(defcustom elisa-prompt-rewriting-enabled t
+  "Enable prompt rewriting for better retrieving."
+  :group 'tools
+  :type 'boolean)
+
+(defcustom elisa-rewrite-prompt-template
+  "With given context rewrite next user prompt to be understandable
+without context. Don't answer to prompt itself. Be short and
+concise. Act like user. Prompt:
+%s"
+  "Prompt template for prompt rewriting."
+  :group 'tools
+  :type 'string)
 
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
@@ -428,9 +442,23 @@ closer it is to 1, the more similar it is."
 (defun elisa-chat (prompt)
   "Send PROMPT to elisa."
   (interactive "sAsk elisa: ")
-  (let ((infos (elisa-find-similar prompt)))
-    (mapc #'ellama-context-add-info-node infos)
-    (ellama-chat prompt nil :provider elisa-chat-provider)))
+  (if (and elisa-prompt-rewriting-enabled ellama--current-session-id)
+      (ellama-chain
+       prompt
+       `((:provider elisa-chat-provider
+		    :session ,(with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+				ellama--current-session)
+		    :transform (lambda (s)
+				 (format elisa-rewrite-prompt-template s)))
+	 (:provider elisa-chat-provider
+		    :transform (lambda (s)
+				 (let ((infos (elisa-find-similar s)))
+				   (mapc #'ellama-context-add-info-node infos)
+				   ,prompt))
+		    :chat t)))
+    (let ((infos (elisa-find-similar prompt)))
+      (mapc #'ellama-context-add-info-node infos)
+      (ellama-chat prompt nil :provider elisa-chat-provider))))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
