@@ -97,6 +97,11 @@
   :group 'tools
   :type 'float)
 
+(defcustom elisa-semantic-split-function 'elisa-split-by-paragraph
+  "Function for semantic text split."
+  :group 'tools
+  :type 'function)
+
 (defcustom elisa-prompt-rewriting-enabled t
   "Enable prompt rewriting for better retrieving."
   :group 'tools
@@ -264,11 +269,11 @@ concise. Act like user. Prompt:
 	(setq pt (point)))
       (nreverse (cl-remove-if #'string-empty-p result)))))
 
-(defun elisa--split-by-sentence ()
+(defun elisa-split-by-sentence ()
   "Split byffer to list of sentences."
   (elisa--split-by #'forward-sentence))
 
-(defun elisa--split-by-paragraph ()
+(defun elisa-split-by-paragraph ()
   "Split buffer to list of paragraphs."
   (elisa--split-by #'forward-paragraph))
 
@@ -308,16 +313,24 @@ closer it is to 1, the more similar it is."
       (setq tail (cdr tail)))
     (nreverse result)))
 
-(defun elisa-split-semantically ()
-  "Split buffer data semantically."
-  (let* ((paragraphs (elisa--split-by-paragraph))
+(defun elisa-split-semantically (&rest args)
+  "Split buffer data semantically.
+ARGS contains keys for fine control.
+
+:function FUNC -- FUNC is a function for split buffer into chunks.
+
+:threshold T -- T is a floating point number.  If similarity of two chunks more
+than T, it will be packed into single semantic chunk."
+  (let* ((func (or (plist-get args :function) elisa-semantic-split-function))
+	 (threshold (or (plist-get args :threshold) elisa-semantic-split-threshold))
+	 (chunks (funcall func))
 	 (embeddings (mapcar (lambda (s)
 			       (llm-embedding elisa-embeddings-provider s))
-			     paragraphs))
+			     chunks))
 	 (similarities (elisa--similarities embeddings))
 	 (result nil)
-	 (current (car paragraphs))
-	 (tail (cdr paragraphs)))
+	 (current (car chunks))
+	 (tail (cdr chunks)))
     (mapc
      (lambda (el)
        (if (> el elisa-semantic-split-threshold)
@@ -408,6 +421,7 @@ closer it is to 1, the more similar it is."
 		  ,(async-inject-variables "elisa-find-executable")
 		  ,(async-inject-variables "elisa-tar-executable")
 		  ,(async-inject-variables "elisa-semantic-split-threshold")
+		  ,(async-inject-variables "elisa-semantic-split-function")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
