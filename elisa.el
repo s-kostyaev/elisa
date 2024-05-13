@@ -92,7 +92,7 @@
   :group 'tools
   :type 'string)
 
-(defcustom elisa-semantic-split-threshold 0.6 ;; 0.6 for paragraphs, 0.22 for sentences
+(defcustom elisa-semantic-split-threshold 0.6
   "Cosine similarity threshold for semantic splitting."
   :group 'tools
   :type 'float)
@@ -325,7 +325,8 @@ than T, it will be packed into single semantic chunk."
 	 (threshold (or (plist-get args :threshold) elisa-semantic-split-threshold))
 	 (chunks (funcall func))
 	 (embeddings (mapcar (lambda (s)
-			       (llm-embedding elisa-embeddings-provider s))
+			       (when (length< (string-trim s) 0)
+				 (llm-embedding elisa-embeddings-provider s)))
 			     chunks))
 	 (similarities (elisa--similarities embeddings))
 	 (result nil)
@@ -430,6 +431,23 @@ than T, it will be packed into single semantic chunk."
 		 (elisa--reopen-db)
 		 (message "%s done."
 			  func))))
+
+(defun elisa-extact-webpage-chunks (url)
+  "Extract semantic chunks for webpage fetched from URL."
+  (let ((buffer-name (url-retrieve-synchronously url t)))
+    (with-current-buffer buffer-name
+      (goto-char (point-min))
+      (or (search-forward "<!DOCTYPE" nil t)
+          (search-forward "<html" nil))
+      (beginning-of-line)
+      (kill-region (point-min) (point))
+      (shr-insert-document (libxml-parse-html-region (point-min) (point-max)))
+      (goto-char (point-min))
+      (or (search-forward "<!DOCTYPE" nil t)
+          (search-forward "<html" nil))
+      (beginning-of-line)
+      (kill-region (point) (point-max))
+      (elisa-split-semantically))))
 
 ;;;###autoload
 (defun elisa-async-parse-builtin-manuals ()
