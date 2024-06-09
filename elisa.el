@@ -177,9 +177,42 @@ concise. Act like user. Prompt:
   (format "create virtual table if not exists elisa_embeddings using vss0(embedding(%d));"
 	  (elisa-get-embedding-size)))
 
+(defun elisa-data-embeddings-create-table-sql ()
+  "Generate sql for create data embeddings table."
+  (format "create virtual table if not exists data_embeddings using vss0(embedding(%d));"
+	  (elisa-get-embedding-size)))
+
+(defun elisa-data-fts-create-table-sql ()
+  "Generate sql for create full text search table."
+  "create virtual table if not exists data_fts using fts5(data);")
+
 (defun elisa-info-create-table-sql ()
   "Generate sql for create info table."
   "create table if not exists info (node text unique);")
+
+(defun elisa-collections-create-table-sql ()
+  "Generate sql for create collections table."
+  "create table if not exists collections (name text unique);")
+
+(defun elisa-kinds-create-table-sql ()
+  "Generate sql for create kinds table."
+  "create table if not exists kinds (name text unique);")
+
+(defun elisa-fill-kinds-sql ()
+  "Generate sql for fill kinds table."
+  "insert into kinds (name) values ('web'), ('file'), ('info') on conflict do nothing;")
+
+(defun elisa-data-create-table-sql ()
+  "Generate sql for create data table."
+  "create table if not exists data (
+kind_id INTEGER,
+collection_id INTEGER,
+path text,
+hash text,
+data text,
+FOREIGN KEY(kind_id) REFERENCES kinds(rowid),
+FOREIGN KEY(collection_id) REFERENCES collections(rowid)
+);")
 
 (defun elisa--init-db (db)
   "Initialize elisa DB."
@@ -192,7 +225,13 @@ concise. Act like user. Prompt:
      db
      (elisa--vss-path))
     (sqlite-execute db (elisa-embeddings-create-table-sql))
-    (sqlite-execute db (elisa-info-create-table-sql))))
+    (sqlite-execute db (elisa-info-create-table-sql))
+    (sqlite-execute db (elisa-collections-create-table-sql))
+    (sqlite-execute db (elisa-kinds-create-table-sql))
+    (sqlite-execute db (elisa-fill-kinds-sql))
+    (sqlite-execute db (elisa-data-create-table-sql))
+    (sqlite-execute db (elisa-data-embeddings-create-table-sql))
+    (sqlite-execute db (elisa-data-fts-create-table-sql))))
 
 (defvar elisa-db (progn
 		   (make-directory elisa-db-directory t)
