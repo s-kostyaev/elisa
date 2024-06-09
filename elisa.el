@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.9.3") (llm "0.9.1") (async "1.9.8"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.9.10") (llm "0.9.1") (async "1.9.8"))
 ;; Version: 0.1.4
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -49,6 +49,7 @@
 (require 'info)
 (require 'async)
 (require 'dom)
+(require 'shr)
 
 (defcustom elisa-embeddings-provider (progn (require 'llm-ollama)
 					    (make-llm-ollama
@@ -334,7 +335,7 @@ than T, it will be packed into single semantic chunk."
 	 (tail (cdr chunks)))
     (mapc
      (lambda (el)
-       (if (> el elisa-semantic-split-threshold)
+       (if (> el threshold)
 	   (setq current (concat current (car tail)))
 	 (push current result)
 	 (setq current (car tail)))
@@ -369,6 +370,23 @@ than T, it will be packed into single semantic chunk."
 	   (point) (point-max))
 	  'a))
 	:test 'string-equal)))))
+
+(defun elisa-get-webpage-buffer (url)
+  "Get buffer with URL content."
+  (let ((buffer-name (url-retrieve-synchronously url t)))
+    (with-current-buffer buffer-name
+      (goto-char (point-min))
+      (or (search-forward "<!DOCTYPE" nil t)
+          (search-forward "<html" nil))
+      (beginning-of-line)
+      (kill-region (point-min) (point))
+      (shr-insert-document (libxml-parse-html-region (point-min) (point-max)))
+      (goto-char (point-min))
+      (or (search-forward "<!DOCTYPE" nil t)
+          (search-forward "<html" nil))
+      (beginning-of-line)
+      (kill-region (point) (point-max))
+      buffer-name)))
 
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
