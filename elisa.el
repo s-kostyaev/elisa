@@ -207,7 +207,10 @@ concise. Act like user. Prompt:
 
 (defun elisa-sqlite-escape (s)
   "Escape single quotes in S for sqlite."
-  (string-replace "'" "''" s))
+  (thread-last
+    s
+    (string-replace "'" "''")
+    (string-replace "\\" "\\\\")))
 
 (defun elisa-parse-info-manual (name)
   "Parse info manual with NAME and save index to database."
