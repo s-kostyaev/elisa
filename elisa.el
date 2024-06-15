@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.9.10") (llm "0.9.1") (async "1.9.8"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.9.10") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
 ;; Version: 0.1.4
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -50,6 +50,8 @@
 (require 'async)
 (require 'dom)
 (require 'shr)
+(require 'plz)
+(require 'json)
 
 (defcustom elisa-embeddings-provider (progn (require 'llm-ollama)
 					    (make-llm-ollama
@@ -81,12 +83,12 @@
 (defcustom elisa-find-executable (executable-find "find")
   "Path to find executable."
   :group 'tools
-  :type 'integer)
+  :type 'string)
 
 (defcustom elisa-tar-executable (executable-find "tar")
   "Path to tar executable."
   :group 'tools
-  :type 'integer)
+  :type 'string)
 
 (defcustom elisa-sqlite-vss-version "v0.1.2"
   "Sqlite VSS version."
@@ -116,6 +118,21 @@ concise. Act like user. Prompt:
   "Prompt template for prompt rewriting."
   :group 'tools
   :type 'string)
+
+(defcustom elisa-searxng-url "http://localhost:8080/"
+  "Searxng url for web search. Json format should be enabled for this instance."
+  :group 'tools
+  :type 'string)
+
+(defcustom elisa-pandoc-executable "pandoc"
+  "Path to pandoc executable."
+  :group 'tools
+  :type 'string)
+
+(defcustom elisa-webpage-extraction-function 'elisa-get-webpage-buffer
+  "Function to get buffer with webpage content."
+  :group 'tools
+  :type 'function)
 
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
@@ -392,7 +409,10 @@ than T, it will be packed into single semantic chunk."
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
   (let* ((url (format "https://duckduckgo.com/html/?q=%s" (url-hexify-string prompt)))
-	 (buffer-name (url-retrieve-synchronously url t)))
+	 (buffer-name (plz 'get url :as 'buffer
+			:headers `(("Accept" . ,eww-accept-content-types)
+				   ("Accept-Encoding" . "gzip")
+				   ("User-Agent" . ,(url-http--user-agent-default-string))))))
     (with-current-buffer buffer-name
       (goto-char (point-min))
       (search-forward "<!DOCTYPE")
@@ -413,9 +433,21 @@ than T, it will be packed into single semantic chunk."
 	  'a))
 	:test 'string-equal)))))
 
+(defun elisa-search-searxng (prompt)
+  "Search searxng for PROMPT and return list of urls.
+You can customize `elisa-searxng-url' to use non local instance."
+  (let ((url (format "%s/search?format=json&q=%s" elisa-searxng-url (url-hexify-string prompt))))
+    (thread-last
+      (plz 'get url :as 'json-read)
+      (alist-get 'results)
+      (mapcar (lambda (el) (alist-get 'url el))))))
+
 (defun elisa-get-webpage-buffer (url)
   "Get buffer with URL content."
-  (let ((buffer-name (url-retrieve-synchronously url t)))
+  (let ((buffer-name (plz 'get url :as 'buffer
+		       :headers `(("Accept" . ,eww-accept-content-types)
+				  ("Accept-Encoding" . "gzip")
+				  ("User-Agent" . ,(url-http--user-agent-default-string))))))
     (with-current-buffer buffer-name
       (goto-char (point-min))
       (or (search-forward "<!DOCTYPE" nil t)
@@ -428,6 +460,17 @@ than T, it will be packed into single semantic chunk."
           (search-forward "<html" nil))
       (beginning-of-line)
       (kill-region (point) (point-max))
+      buffer-name)))
+
+(defun elisa-get-webpage-buffer-pandoc (url)
+  "Get buffer with URL content translated to markdown with pandoc."
+  (let ((buffer-name (plz 'get url :as 'buffer)))
+    (with-current-buffer buffer-name
+      (shell-command-on-region
+       (point-min) (point-max)
+       (format "%s -f html --to plain"
+	       (executable-find elisa-pandoc-executable))
+       buffer-name t)
       buffer-name)))
 
 (defun elisa-get-builtin-manuals ()
@@ -449,7 +492,8 @@ than T, it will be packed into single semantic chunk."
     (process-lines
      elisa-find-executable
      (file-truename
-      (file-name-concat user-emacs-directory "elpa")) "-name" "*.info"))))
+      (file-name-concat user-emacs-directory "elpa"))
+     "-name" "*.info"))))
 
 (defun elisa-parse-builtin-manuals ()
   "Parse builtin manuals."
@@ -494,20 +538,8 @@ than T, it will be packed into single semantic chunk."
 
 (defun elisa-extact-webpage-chunks (url)
   "Extract semantic chunks for webpage fetched from URL."
-  (let ((buffer-name (url-retrieve-synchronously url t)))
-    (with-current-buffer buffer-name
-      (goto-char (point-min))
-      (or (search-forward "<!DOCTYPE" nil t)
-          (search-forward "<html" nil))
-      (beginning-of-line)
-      (kill-region (point-min) (point))
-      (shr-insert-document (libxml-parse-html-region (point-min) (point-max)))
-      (goto-char (point-min))
-      (or (search-forward "<!DOCTYPE" nil t)
-          (search-forward "<html" nil))
-      (beginning-of-line)
-      (kill-region (point) (point-max))
-      (elisa-split-semantically))))
+  (with-current-buffer (funcall elisa-webpage-extraction-function url)
+    (elisa-split-semantically)))
 
 ;;;###autoload
 (defun elisa-async-parse-builtin-manuals ()
