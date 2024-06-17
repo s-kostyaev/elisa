@@ -135,6 +135,17 @@ prompt only. User prompt:
   :group 'tools
   :type 'function)
 
+(defcustom elisa-web-search-function 'elisa-search-duckduckgo
+  "Function to search the web.
+Function should get prompt and return list of urls."
+  :group 'tools
+  :type 'function)
+
+(defcustom elisa-web-pages-limit 10
+  "Limit of web pages to parse during web search."
+  :group 'tools
+  :type 'integer)
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
   (cond  ((string-equal system-type "darwin")
@@ -268,6 +279,12 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
     s
     (string-replace "'" "''")
     (string-replace "\\" "\\\\")))
+
+(defun elisa-sqlite-format-int-list (ids)
+  "Convert list of integer IDS list to sqlite list representation."
+  (format
+   "(%s)"
+   (string-join (mapcar (lambda (id) (format "%d" id)) ids) ", ")))
 
 (defun elisa-parse-info-manual (name)
   "Parse info manual with NAME and save index to database."
@@ -404,7 +421,10 @@ than T, it will be packed into single semantic chunk."
     (push current result)
     (cl-remove-if
      #'string-empty-p
-     (mapcar #'string-trim
+     (mapcar (lambda (s)
+	       (if s
+		   (string-trim s)
+		 ""))
 	     (nreverse result)))))
 
 (defun elisa-search-duckduckgo (prompt)
@@ -476,6 +496,128 @@ You can customize `elisa-searxng-url' to use non local instance."
 	       (executable-find elisa-pandoc-executable))
        buffer-name t)
       buffer-name)))
+
+(defun elisa-fts-query (prompt)
+  "Return fts match query for PROMPT."
+  (thread-last
+    prompt
+    (string-trim)
+    (downcase)
+    (string-replace "-" " ")
+    (replace-regexp-in-string "[^[:alnum:] ]+" "")
+    (string-trim)
+    (replace-regexp-in-string "[[:space:]]+" " OR ")))
+
+(defun elisa-web-search (prompt)
+  "Search the web for PROMPT."
+  (interactive "sAsk elisa with web search: ")
+  (message "searching the web")
+  (sqlite-execute
+   elisa-db
+   (format
+    "insert into collections (name) values ('%s') on conflict do nothing;"
+    (elisa-sqlite-escape prompt)))
+  (let* ((kind-id (caar (sqlite-select
+			 elisa-db "select rowid from kinds where name = 'web';")))
+	 (collection-id (caar (sqlite-select
+			       elisa-db
+			       (format
+				"select rowid from collections where name = '%s';"
+				(elisa-sqlite-escape prompt)))))
+	 (urls (funcall elisa-web-search-function prompt))
+	 (collected-pages 0))
+    (mapc (lambda (url)
+	    (when (<= collected-pages elisa-web-pages-limit)
+	      (message "collecting data from %s" url)
+	      (mapc
+	       (lambda (chunk)
+		 (let* ((hash (secure-hash 'sha256 chunk))
+			(embedding (llm-embedding elisa-embeddings-provider chunk))
+			(rowid
+			 (if-let ((rowid (caar (sqlite-select
+						elisa-db
+						(format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash)))))
+			     nil
+			   (sqlite-execute
+			    elisa-db
+			    (format
+			     "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+			     kind-id collection-id url hash (elisa-sqlite-escape chunk)))
+			   (caar (sqlite-select
+				  elisa-db
+				  (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash))))))
+		   (when rowid
+		     (sqlite-execute
+		      elisa-db
+		      (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+			      rowid (elisa-vector-to-sqlite embedding)))
+		     (sqlite-execute
+		      elisa-db
+		      (format "insert into data_fts(rowid, data) values (%s, '%s');"
+			      rowid (elisa-sqlite-escape chunk))))))
+	       (elisa-extact-webpage-chunks url))
+	      (cl-incf collected-pages)))
+	  urls)
+    (message "searching in collected data")
+    (let* ((rowids (mapcar
+		    #'car
+		    (sqlite-select
+		     elisa-db
+		     (format "select rowid from data where collection_id = %s;" collection-id))))
+	   (query (format "WITH
+vector_search AS (
+  SELECT rowid, distance
+  FROM data_embeddings
+  WHERE vss_search(embedding, %s)
+  ORDER BY distance ASC
+  LIMIT 40
+),
+semantic_search AS (
+  SELECT rowid, RANK () OVER (ORDER BY distance ASC) AS rank
+  FROM vector_search
+  WHERE rowid IN %s
+  ORDER BY distance ASC
+  LIMIT 20
+),
+keyword_search AS (
+  SELECT rowid, RANK () OVER (ORDER BY bm25(data_fts) ASC) AS rank
+  FROM data_fts
+  WHERE rowid in %s and data_fts MATCH '%s'
+  ORDER BY bm25(data_fts) ASC
+  LIMIT 20
+),
+hybrid_search AS (
+SELECT
+  COALESCE(semantic_search.rowid, keyword_search.rowid) AS rowid,
+  COALESCE(1.0 / (60 + semantic_search.rank), 0.0) +
+  COALESCE(1.0 / (60 + keyword_search.rank), 0.0) AS score
+FROM semantic_search
+FULL OUTER JOIN keyword_search ON semantic_search.rowid = keyword_search.rowid
+ORDER BY score DESC
+LIMIT %d
+)
+SELECT
+  hybrid_search.rowid,
+  d.path AS url,
+  d.data AS text
+FROM hybrid_search
+LEFT JOIN data d ON hybrid_search.rowid = d.rowid
+;
+"
+			  (elisa-vector-to-sqlite (llm-embedding elisa-embeddings-provider prompt))
+			  (elisa-sqlite-format-int-list rowids)
+			  (elisa-sqlite-format-int-list rowids)
+			  (elisa-fts-query
+			   prompt)
+			  elisa-limit)))
+      ;; (message "query:\n%s" query)
+      (mapc
+       (lambda (row)
+	 (when-let ((url (cl-second row))
+		    (text (cl-third row)))
+	   (ellama-context-add-webpage-quote-noninteractive url url text)))
+       (sqlite-select elisa-db query))))
+  (ellama-chat prompt nil :provider elisa-chat-provider))
 
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
