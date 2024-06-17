@@ -111,9 +111,10 @@
   :type 'boolean)
 
 (defcustom elisa-rewrite-prompt-template
-  "With given context rewrite next user prompt to be understandable
-without context. Don't answer to prompt itself. Be short and
-concise. Act like user. Prompt:
+  "You are professional search agent. With given context and user
+prompt you need to create new prompt for search. It should be
+concise and useful without additional context. Response with
+prompt only. User prompt:
 %s"
   "Prompt template for prompt rewriting."
   :group 'tools
