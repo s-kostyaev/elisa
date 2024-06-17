@@ -445,23 +445,26 @@ You can customize `elisa-searxng-url' to use non local instance."
 
 (defun elisa-get-webpage-buffer (url)
   "Get buffer with URL content."
-  (let ((buffer-name (plz 'get url :as 'buffer
-		       :headers `(("Accept" . ,eww-accept-content-types)
-				  ("Accept-Encoding" . "gzip")
-				  ("User-Agent" . ,(url-http--user-agent-default-string))))))
-    (with-current-buffer buffer-name
-      (goto-char (point-min))
-      (or (search-forward "<!DOCTYPE" nil t)
-          (search-forward "<html" nil))
-      (beginning-of-line)
-      (kill-region (point-min) (point))
-      (shr-insert-document (libxml-parse-html-region (point-min) (point-max)))
-      (goto-char (point-min))
-      (or (search-forward "<!DOCTYPE" nil t)
-          (search-forward "<html" nil))
-      (beginning-of-line)
-      (kill-region (point) (point-max))
-      buffer-name)))
+  (let ((buffer-name (ignore-errors
+		       (plz 'get url :as 'buffer
+			 :headers `(("Accept" . ,eww-accept-content-types)
+				    ("Accept-Encoding" . "gzip")
+				    ("User-Agent" . ,(url-http--user-agent-default-string)))))))
+    (when buffer-name
+      (with-current-buffer buffer-name
+	(goto-char (point-min))
+	(or (search-forward "<!DOCTYPE" nil t)
+            (search-forward "<html" nil t))
+	(beginning-of-line)
+	(kill-region (point-min) (point))
+	(ignore-errors
+	  (shr-insert-document (libxml-parse-html-region (point-min) (point-max))))
+	(goto-char (point-min))
+	(or (search-forward "<!DOCTYPE" nil t)
+            (search-forward "<html" nil t))
+	(beginning-of-line)
+	(kill-region (point) (point-max))
+	buffer-name))))
 
 (defun elisa-get-webpage-buffer-pandoc (url)
   "Get buffer with URL content translated to markdown with pandoc."
@@ -539,8 +542,9 @@ You can customize `elisa-searxng-url' to use non local instance."
 
 (defun elisa-extact-webpage-chunks (url)
   "Extract semantic chunks for webpage fetched from URL."
-  (with-current-buffer (funcall elisa-webpage-extraction-function url)
-    (elisa-split-semantically)))
+  (when-let ((buf (funcall elisa-webpage-extraction-function url)))
+    (with-current-buffer buf
+      (elisa-split-semantically))))
 
 ;;;###autoload
 (defun elisa-async-parse-builtin-manuals ()
@@ -577,7 +581,8 @@ You can customize `elisa-searxng-url' to use non local instance."
 				 (format elisa-rewrite-prompt-template s)))
 	 (:provider elisa-chat-provider
 		    :transform (lambda (s)
-				 (let ((infos (elisa-find-similar s)))
+				 (let ((unquoted (string-trim s "[ \t\n\r\"]+" "[ \t\n\r\"]+"))
+				       (infos (elisa-find-similar unquoted)))
 				   (mapc #'ellama-context-add-info-node infos)
 				   ,prompt))
 		    :chat t)))
