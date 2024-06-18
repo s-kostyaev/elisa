@@ -121,7 +121,7 @@ prompt only. User prompt:
   :type 'string)
 
 (defcustom elisa-searxng-url "http://localhost:8080/"
-  "Searxng url for web search. Json format should be enabled for this instance."
+  "Searxng url for web search.  Json format should be enabled for this instance."
   :group 'tools
   :type 'string)
 
