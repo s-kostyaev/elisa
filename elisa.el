@@ -146,6 +146,12 @@ Function should get prompt and return list of urls."
   :group 'tools
   :type 'integer)
 
+(defcustom elisa-breakpoint-threshold-amount 0.4
+  "Breakpoint threshold amount.
+Increase it if you need decrease semantic split granularity."
+  :group 'tools
+  :type 'float)
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
   (cond  ((string-equal system-type "darwin")
@@ -286,6 +292,27 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
    "(%s)"
    (string-join (mapcar (lambda (id) (format "%d" id)) ids) ", ")))
 
+(defun elisa-avg (lst)
+  "Calculate arithmetic average value of LST."
+  (let ((len (length lst))
+	(sum (cl-reduce #'+ lst :initial-value 0.0)))
+    (/ sum len)))
+
+(defun elisa-std-dev (lst)
+  "Calculate standart deviation value of LST."
+  (let ((avg (elisa-avg lst))
+	(len (length lst)))
+    (sqrt (/ (cl-reduce
+	      #'+
+	      (mapcar
+	       (lambda (x) (expt (- x avg) 2))
+	       lst))
+	     len))))
+
+(defun elisa-calculate-threshold (k distances)
+  "Calculate breakpoint threshold for DISTANCES based on K standard deviations."
+  (+ (elisa-avg distances) (* k (elisa-std-dev distances))))
+
 (defun elisa-parse-info-manual (name)
   "Parse info manual with NAME and save index to database."
   (with-temp-buffer
@@ -380,6 +407,10 @@ closer it is to 1, the more similar it is."
         (/ dot-product (* v1-magnitude v2-magnitude))
       0)))
 
+(defun elisa-cosine-distance (v1 v2)
+  "Calculate cosine-distance between V1 and V2."
+  (- 1 (elisa-cosine-similarity v1 v2)))
+
 (defun elisa--similarities (list)
   "Calculate cosine similarities between neighbour elements in LIST."
   (let ((head (car list))
@@ -391,33 +422,48 @@ closer it is to 1, the more similar it is."
       (setq tail (cdr tail)))
     (nreverse result)))
 
+(defun elisa--distances (list)
+  "Calculate cosine distances between neighbour elements in LIST."
+  (let ((head (car list))
+	(tail (cdr list))
+	(result nil))
+    (while tail
+      (push (elisa-cosine-distance head (car tail)) result)
+      (setq head (car tail))
+      (setq tail (cdr tail)))
+    (nreverse result)))
+
 (defun elisa-split-semantically (&rest args)
   "Split buffer data semantically.
 ARGS contains keys for fine control.
 
 :function FUNC -- FUNC is a function for split buffer into chunks.
 
-:threshold T -- T is a floating point number.  If similarity of two chunks more
+:threshold-amount K -- K is a breakpoint threshold amount.
+
 than T, it will be packed into single semantic chunk."
   (let* ((func (or (plist-get args :function) elisa-semantic-split-function))
-	 (threshold (or (plist-get args :threshold) elisa-semantic-split-threshold))
+	 (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
 	 (chunks (funcall func))
-	 (embeddings (mapcar (lambda (s)
-			       (when (length< (string-trim s) 0)
-				 (llm-embedding elisa-embeddings-provider s)))
-			     chunks))
-	 (similarities (elisa--similarities embeddings))
+	 (embeddings (cl-remove-if
+		      #'not
+		      (mapcar (lambda (s)
+				(when (length> (string-trim s) 0)
+				  (llm-embedding elisa-embeddings-provider s)))
+			      chunks)))
+	 (distances (elisa--distances embeddings))
+	 (threshold (elisa-calculate-threshold k distances))
 	 (result nil)
 	 (current (car chunks))
 	 (tail (cdr chunks)))
     (mapc
      (lambda (el)
-       (if (> el threshold)
+       (if (<= el threshold)
 	   (setq current (concat current (car tail)))
 	 (push current result)
 	 (setq current (car tail)))
        (setq tail (cdr tail)))
-     similarities)
+     distances)
     (push current result)
     (cl-remove-if
      #'string-empty-p
