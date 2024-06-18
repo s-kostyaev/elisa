@@ -95,11 +95,6 @@
   :group 'tools
   :type 'string)
 
-(defcustom elisa-semantic-split-threshold 0.6
-  "Cosine similarity threshold for semantic splitting."
-  :group 'tools
-  :type 'float)
-
 (defcustom elisa-semantic-split-function 'elisa-split-by-paragraph
   "Function for semantic text split."
   :group 'tools
@@ -717,8 +712,8 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
 		  ,(async-inject-variables "elisa-db-directory")
 		  ,(async-inject-variables "elisa-find-executable")
 		  ,(async-inject-variables "elisa-tar-executable")
-		  ,(async-inject-variables "elisa-semantic-split-threshold")
 		  ,(async-inject-variables "elisa-semantic-split-function")
+		  ,(async-inject-variables "elisa-breakpoint-threshold-amount")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
