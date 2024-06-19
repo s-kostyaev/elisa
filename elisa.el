@@ -549,10 +549,9 @@ You can customize `elisa-searxng-url' to use non local instance."
     (string-trim)
     (replace-regexp-in-string "[[:space:]]+" " OR ")))
 
-(defun elisa-web-search (prompt)
-  "Search the web for PROMPT."
-  (interactive "sAsk elisa with web search: ")
-  (message "searching the web")
+(defun elisa--web-search (prompt)
+  "Search the web for PROMPT.
+Return sqlite query that extract data for adding to context."
   (sqlite-execute
    elisa-db
    (format
@@ -651,13 +650,25 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
 			  (elisa-fts-query
 			   prompt)
 			  elisa-limit)))
-      ;; (message "query:\n%s" query)
-      (mapc
-       (lambda (row)
-	 (when-let ((url (cl-second row))
-		    (text (cl-third row)))
-	   (ellama-context-add-webpage-quote-noninteractive url url text)))
-       (sqlite-select elisa-db query))))
+      query)))
+
+;;;###autoload
+(defun elisa-web-search (prompt)
+  "Search the web for PROMPT."
+  (interactive "sAsk elisa with web search: ")
+  (message "searching the web")
+  (elisa--async-do (lambda () (elisa--web-search prompt))
+		   (lambda (query)
+		     (elisa-retrieve-ask query prompt))))
+
+(defun elisa-retrieve-ask (query prompt)
+  "Retrieve data with QUERY and ask elisa for PROMPT."
+  (mapc
+   (lambda (row)
+     (when-let ((url (cl-second row))
+		(text (cl-third row)))
+       (ellama-context-add-webpage-quote-noninteractive url url text)))
+   (sqlite-select elisa-db query))
   (ellama-chat prompt nil :provider elisa-chat-provider))
 
 (defun elisa-get-builtin-manuals ()
@@ -705,7 +716,7 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
     (elisa--init-db db)
     (setq elisa-db db)))
 
-(defun elisa--async-do-parse (func)
+(defun elisa--async-do (func &optional on-done)
   "Parse asyncronously with FUNC."
   (async-start `(lambda ()
 		  ,(async-inject-variables "elisa-embeddings-provider")
@@ -713,13 +724,16 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
 		  ,(async-inject-variables "elisa-find-executable")
 		  ,(async-inject-variables "elisa-tar-executable")
 		  ,(async-inject-variables "elisa-semantic-split-function")
+		  ,(async-inject-variables "elisa-web-search-function")
 		  ,(async-inject-variables "elisa-breakpoint-threshold-amount")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
-	       (lambda (_)
+	       (lambda (res)
 		 (sqlite-close elisa-db)
 		 (elisa--reopen-db)
+		 (when on-done
+		   (funcall on-done res))
 		 (message "%s done."
 			  func))))
 
@@ -734,21 +748,21 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
   "Parse builtin manuals asyncronously."
   (interactive)
   (message "Begin parsing builtin manuals.")
-  (elisa--async-do-parse 'elisa-parse-builtin-manuals))
+  (elisa--async-do 'elisa-parse-builtin-manuals))
 
 ;;;###autoload
 (defun elisa-async-parse-external-manuals ()
   "Parse external manuals asyncronously."
   (interactive)
   (message "Begin parsing external manuals.")
-  (elisa--async-do-parse 'elisa-parse-external-manuals))
+  (elisa--async-do 'elisa-parse-external-manuals))
 
 ;;;###autoload
 (defun elisa-async-parse-all-manuals ()
   "Parse all manuals asyncronously."
   (interactive)
   (message "Begin parsing manuals.")
-  (elisa--async-do-parse 'elisa-parse-all-manuals))
+  (elisa--async-do 'elisa-parse-all-manuals))
 
 ;;;###autoload
 (defun elisa-chat (prompt)
