@@ -76,7 +76,7 @@
   :type 'directory)
 
 (defcustom elisa-limit 5
-  "Count info nodes to pass into llm context for answer."
+  "Count quotes to pass into llm context for answer."
   :group 'tools
   :type 'integer)
 
@@ -723,9 +723,15 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
 		  ,(async-inject-variables "elisa-db-directory")
 		  ,(async-inject-variables "elisa-find-executable")
 		  ,(async-inject-variables "elisa-tar-executable")
+		  ,(async-inject-variables "elisa-prompt-rewriting-enabled")
+		  ,(async-inject-variables "elisa-rewrite-prompt-template")
 		  ,(async-inject-variables "elisa-semantic-split-function")
+		  ,(async-inject-variables "elisa-webpage-extraction-function")
 		  ,(async-inject-variables "elisa-web-search-function")
+		  ,(async-inject-variables "elisa-searxng-url")
+		  ,(async-inject-variables "elisa-web-pages-limit")
 		  ,(async-inject-variables "elisa-breakpoint-threshold-amount")
+		  ,(async-inject-variables "elisa-pandoc-executable")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
