@@ -147,6 +147,27 @@ Increase it if you need decrease semantic split granularity."
   :group 'tools
   :type 'float)
 
+(defcustom elisa-reranker-enabled t
+  "Enable reranker to improve retrieving quality."
+  :group 'tools
+  :type 'boolean)
+
+(defcustom elisa-reranker-url "http://127.0.0.1:8787/"
+  "Reranker service url."
+  :group 'tools
+  :type 'string)
+
+(defcustom elisa-reranker-similarity-threshold 0
+  "Reranker similarity threshold.
+If set, all quotes with similarity less than threshold will be filtered out."
+  :group 'tools
+  :type 'string)
+
+(defcustom elisa-reranker-limit 20
+  "Number of quotes for send to reranker."
+  :group 'tools
+  :type 'integer)
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
   (cond  ((string-equal system-type "darwin")
@@ -549,6 +570,52 @@ You can customize `elisa-searxng-url' to use non local instance."
     (string-trim)
     (replace-regexp-in-string "[[:space:]]+" " OR ")))
 
+(defun elisa--rerank-request (prompt ids)
+  "Generate rerank request body for PROMPT and IDS."
+  (let ((docs
+	 (mapcar
+	  (lambda (row)
+	    (let ((id (cl-first row))
+		  (text (cl-second row)))
+	      `(("id" . ,id) ("text" . ,text))))
+	  (sqlite-select
+	   elisa-db
+	   (format
+	    "select rowid, data from data where rowid in %s;"
+	    (elisa-sqlite-format-int-list ids))))))
+    (json-encode `(("query" . ,prompt)
+		   ("documents" . ,docs)))))
+
+(defun elisa--do-rerank-request (prompt ids)
+  "Call rerank service for PROMPT and IDS."
+  (seq--into-list
+   (alist-get 'data
+	      (plz 'post (format "%s/api/v1/rerank"
+				 (string-remove-suffix "/" elisa-reranker-url))
+		:headers `(("Content-Type" . "application/json"))
+		:body-type 'text
+		:body (elisa--rerank-request prompt ids)
+		:as #'json-read))))
+
+(defun elisa-rerank (prompt ids)
+  "Rerank IDS according to PROMPT and return top `elisa-limit' IDS."
+  (let ((data (elisa--do-rerank-request prompt ids)))
+    (mapcar (lambda (elt)
+	      (alist-get 'id elt))
+	    (take elisa-limit
+		  (if elisa-reranker-similarity-threshold
+		      (cl-remove-if (lambda (obj)
+				      (< (alist-get 'similarity obj)
+					 elisa-reranker-similarity-threshold))
+				    data)
+		    data)))))
+
+(defun elisa-get-limit ()
+  "Limit for elisa hybrid search."
+  (if elisa-reranker-enabled
+      elisa-reranker-limit
+    elisa-limit))
+
 (defun elisa--web-search (prompt)
   "Search the web for PROMPT.
 Return sqlite query that extract data for adding to context."
@@ -637,19 +704,16 @@ ORDER BY score DESC
 LIMIT %d
 )
 SELECT
-  hybrid_search.rowid,
-  d.path AS url,
-  d.data AS text
+  hybrid_search.rowid
 FROM hybrid_search
-LEFT JOIN data d ON hybrid_search.rowid = d.rowid
 ;
 "
-			  (elisa-vector-to-sqlite (llm-embedding elisa-embeddings-provider prompt))
+			  (elisa-vector-to-sqlite
+			   (llm-embedding elisa-embeddings-provider prompt))
 			  (elisa-sqlite-format-int-list rowids)
 			  (elisa-sqlite-format-int-list rowids)
-			  (elisa-fts-query
-			   prompt)
-			  elisa-limit)))
+			  (elisa-fts-query prompt)
+			  (elisa-get-limit))))
       query)))
 
 ;;;###autoload
@@ -663,13 +727,31 @@ LEFT JOIN data d ON hybrid_search.rowid = d.rowid
 
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
-  (mapc
-   (lambda (row)
-     (when-let ((url (cl-second row))
-		(text (cl-third row)))
-       (ellama-context-add-webpage-quote-noninteractive url url text)))
-   (sqlite-select elisa-db query))
-  (ellama-chat prompt nil :provider elisa-chat-provider))
+  (let* ((raw-ids (mapcar #'car (sqlite-select elisa-db query)))
+	 (ids (if elisa-reranker-enabled
+		  (elisa-rerank prompt raw-ids)
+		(take elisa-limit raw-ids))))
+    (mapc
+     (lambda (row)
+       (when-let ((kind (cl-first row))
+		  (path (cl-second row))
+		  (text (cl-third row)))
+	 (pcase kind
+	   ("web"
+	    (ellama-context-add-webpage-quote-noninteractive path path text))
+	   ("file"
+	    (ellama-context-add-file-quote-noninteractive path text))
+	   ("info"
+	    (ellama-context-add-info-node-quote-noninteractive path text)))))
+     (sqlite-select
+      elisa-db
+      (format
+       "SELECT k.name, d.path, d.data
+FROM data AS d
+LEFT JOIN kinds k ON k.rowid = d.kind_id
+WHERE d.rowid in %s;"
+       (elisa-sqlite-format-int-list ids))))
+    (ellama-chat prompt nil :provider elisa-chat-provider)))
 
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
