@@ -458,36 +458,36 @@ ARGS contains keys for fine control.
 :threshold-amount K -- K is a breakpoint threshold amount.
 
 than T, it will be packed into single semantic chunk."
-  (let* ((func (or (plist-get args :function) elisa-semantic-split-function))
-	 (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
-	 (chunks (funcall func))
-	 (embeddings (cl-remove-if
-		      #'not
-		      (mapcar (lambda (s)
-				(when (length> (string-trim s) 0)
-				  (llm-embedding elisa-embeddings-provider s)))
-			      chunks)))
-	 (distances (elisa--distances embeddings))
-	 (threshold (elisa-calculate-threshold k distances))
-	 (result nil)
-	 (current (car chunks))
-	 (tail (cdr chunks)))
-    (mapc
-     (lambda (el)
-       (if (<= el threshold)
-	   (setq current (concat current (car tail)))
-	 (push current result)
-	 (setq current (car tail)))
-       (setq tail (cdr tail)))
-     distances)
-    (push current result)
-    (cl-remove-if
-     #'string-empty-p
-     (mapcar (lambda (s)
-	       (if s
-		   (string-trim s)
-		 ""))
-	     (nreverse result)))))
+  (when-let* ((func (or (plist-get args :function) elisa-semantic-split-function))
+	      (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
+	      (chunks (funcall func))
+	      (embeddings (cl-remove-if
+			   #'not
+			   (mapcar (lambda (s)
+				     (when (length> (string-trim s) 0)
+				       (llm-embedding elisa-embeddings-provider s)))
+				   chunks)))
+	      (distances (elisa--distances embeddings))
+	      (threshold (elisa-calculate-threshold k distances))
+	      (current (car chunks))
+	      (tail (cdr chunks)))
+    (let* ((result nil))
+      (mapc
+       (lambda (el)
+	 (if (<= el threshold)
+	     (setq current (concat current (car tail)))
+	   (push current result)
+	   (setq current (car tail)))
+	 (setq tail (cdr tail)))
+       distances)
+      (push current result)
+      (cl-remove-if
+       #'string-empty-p
+       (mapcar (lambda (s)
+		 (if s
+		     (string-trim s)
+		   ""))
+	       (nreverse result))))))
 
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
@@ -531,7 +531,10 @@ You can customize `elisa-searxng-url' to use non local instance."
 		       (plz 'get url :as 'buffer
 			 :headers `(("Accept" . ,eww-accept-content-types)
 				    ("Accept-Encoding" . "gzip")
-				    ("User-Agent" . ,(url-http--user-agent-default-string)))))))
+				    ("User-Agent" . ,(url-http--user-agent-default-string))))))
+	;; fix one word lines for async execution
+	(shr-use-fonts nil)
+	(shr-width (- ellama-long-lines-length 5)))
     (when buffer-name
       (with-current-buffer buffer-name
 	(goto-char (point-min))
@@ -814,6 +817,7 @@ WHERE d.rowid in %s;"
 		  ,(async-inject-variables "elisa-web-pages-limit")
 		  ,(async-inject-variables "elisa-breakpoint-threshold-amount")
 		  ,(async-inject-variables "elisa-pandoc-executable")
+		  ,(async-inject-variables "ellama-long-lines-length")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
