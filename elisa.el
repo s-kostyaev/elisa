@@ -300,7 +300,8 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   (thread-last
     s
     (string-replace "'" "''")
-    (string-replace "\\" "\\\\")))
+    (string-replace "\\" "\\\\")
+    (string-replace "\0" "\n")))
 
 (defun elisa-sqlite-format-int-list (ids)
   "Convert list of integer IDS list to sqlite list representation."
@@ -329,40 +330,67 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Calculate breakpoint threshold for DISTANCES based on K standard deviations."
   (+ (elisa-avg distances) (* k (elisa-std-dev distances))))
 
-(defun elisa-parse-info-manual (name)
-  "Parse info manual with NAME and save index to database."
+(defun elisa-parse-info-manual (name collection-name)
+  "Parse info manual with NAME and save index to COLLECTION-NAME."
   (with-temp-buffer
     (info name (current-buffer))
-    (let ((continue t))
+    (let ((collection-id (or (caar (sqlite-select
+				    elisa-db
+				    (format
+				     "select rowid from collections where name = '%s';"
+				     collection-name)))
+			     (progn
+			       (sqlite-execute
+				elisa-db
+				(format
+				 "insert into collections (name) values ('%s');"
+				 collection-name))
+			       (caar (sqlite-select
+				      elisa-db
+				      (format
+				       "select rowid from collections where name = '%s';"
+				       collection-name))))))
+	  (kind-id (caar (sqlite-select
+			  elisa-db "select rowid from kinds where name = 'info';")))
+	  (continue t))
       (while continue
 	(let* ((node-name (concat "(" (file-name-sans-extension
 				       (file-name-nondirectory Info-current-file))
 				  ") "
 				  Info-current-node))
-	       (content (buffer-substring-no-properties (point-min) (point-max)))
-	       (embedding (llm-embedding elisa-embeddings-provider content))
-	       (rowid (progn
-			(sqlite-execute elisa-db
-					(format
-					 "insert into info values('%s') on conflict do nothing;"
-					 (elisa-sqlite-escape node-name)))
-			(caar
-			 (sqlite-select
-			  elisa-db
-			  (format "select rowid from info where node='%s';"
-				  (elisa-sqlite-escape node-name)))))))
-	  (when (not (caar
-		      (sqlite-select
-		       elisa-db
-		       (format "select rowid from elisa_embeddings where rowid=%s;" rowid))))
-	    (sqlite-execute
-	     elisa-db
-	     (format "insert into elisa_embeddings(rowid, embedding) values (%s, %s);"
-		     rowid
-		     (elisa-vector-to-sqlite embedding))))
+	       (chunks (elisa-split-semantically)))
+	  (mapc
+	   (lambda (text)
+	     (let* ((hash (secure-hash 'sha256 text))
+		    (embedding (llm-embedding elisa-embeddings-provider text))
+		    (rowid
+		     (if-let ((rowid (caar (sqlite-select
+					    elisa-db
+					    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+						    kind-id collection-id node-name hash)))))
+			 nil
+		       (sqlite-execute
+			elisa-db
+			(format
+			 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+			 kind-id collection-id node-name hash (elisa-sqlite-escape text)))
+		       (caar (sqlite-select
+			      elisa-db
+			      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+				      kind-id collection-id node-name hash))))))
+	       (when rowid
+		 (sqlite-execute
+		  elisa-db
+		  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+			  rowid (elisa-vector-to-sqlite embedding)))
+		 (sqlite-execute
+		  elisa-db
+		  (format "insert into data_fts(rowid, data) values (%s, '%s');"
+			  rowid (elisa-sqlite-escape text))))))
+	   chunks)
 	  (condition-case nil
 	      (progn (funcall-interactively #'Info-forward-node)
-		     (sleep-for 0 100))
+		     (sleep-for 0 10))
 	    (error
 	     (setq continue nil))))))))
 
@@ -781,13 +809,13 @@ WHERE d.rowid in %s;"
 (defun elisa-parse-builtin-manuals ()
   "Parse builtin manuals."
   (mapc (lambda (s)
-	  (ignore-errors (elisa-parse-info-manual s)))
+	  (ignore-errors (elisa-parse-info-manual s "builtin manuals")))
 	(elisa-get-builtin-manuals)))
 
 (defun elisa-parse-external-manuals ()
   "Parse external manuals."
   (mapc (lambda (s)
-	  (ignore-errors (elisa-parse-info-manual s)))
+	  (ignore-errors (elisa-parse-info-manual s "external manuals")))
 	(elisa-get-external-manuals)))
 
 (defun elisa-parse-all-manuals ()
@@ -802,7 +830,8 @@ WHERE d.rowid in %s;"
     (setq elisa-db db)))
 
 (defun elisa--async-do (func &optional on-done)
-  "Parse asyncronously with FUNC."
+  "Do FUNC asyncronously.
+Call ON-DONE callback with result as an argument after FUNC evaluation done."
   (async-start `(lambda ()
 		  ,(async-inject-variables "elisa-embeddings-provider")
 		  ,(async-inject-variables "elisa-db-directory")
