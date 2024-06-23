@@ -374,17 +374,20 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 		     (if-let ((rowid (caar (sqlite-select
 					    elisa-db
 					    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-						    kind-id collection-id node-name hash)))))
+						    kind-id collection-id
+						    (elisa-sqlite-escape node-name) hash)))))
 			 nil
 		       (sqlite-execute
 			elisa-db
 			(format
 			 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
-			 kind-id collection-id node-name hash (elisa-sqlite-escape text)))
+			 kind-id collection-id
+			 (elisa-sqlite-escape node-name) hash (elisa-sqlite-escape text)))
 		       (caar (sqlite-select
 			      elisa-db
 			      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-				      kind-id collection-id node-name hash))))))
+				      kind-id collection-id
+				      (elisa-sqlite-escape node-name) hash))))))
 	       (when rowid
 		 (sqlite-execute
 		  elisa-db
@@ -396,8 +399,7 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 			  rowid (elisa-sqlite-escape text))))))
 	   chunks)
 	  (condition-case nil
-	      (progn (funcall-interactively #'Info-forward-node)
-		     (sleep-for 0 10))
+	      (funcall-interactively #'Info-forward-node)
 	    (error
 	     (setq continue nil))))))))
 
