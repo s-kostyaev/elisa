@@ -225,8 +225,7 @@ If set, all quotes with similarity less than threshold will be filtered out."
 
 (defun elisa-embeddings-create-table-sql ()
   "Generate sql for create embeddings table."
-  (format "create virtual table if not exists elisa_embeddings using vss0(embedding(%d));"
-	  (elisa-get-embedding-size)))
+  "drop table if exists elisa_embeddings;")
 
 (defun elisa-data-embeddings-create-table-sql ()
   "Generate sql for create data embeddings table."
@@ -239,7 +238,7 @@ If set, all quotes with similarity less than threshold will be filtered out."
 
 (defun elisa-info-create-table-sql ()
   "Generate sql for create info table."
-  "create table if not exists info (node text unique);")
+  "drop table if exists info;")
 
 (defun elisa-collections-create-table-sql ()
   "Generate sql for create collections table."
@@ -308,6 +307,14 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   (format
    "(%s)"
    (string-join (mapcar (lambda (id) (format "%d" id)) ids) ", ")))
+
+(defun elisa-sqlite-format-string-list (names)
+  "Convert list of string NAMES list to sqlite list representation."
+  (format
+   "(%s)"
+   (string-join (mapcar (lambda (name)
+			  (format "'%s'"
+				  (elisa-sqlite-escape name))) names) ", ")))
 
 (defun elisa-avg (lst)
   "Calculate arithmetic average value of LST."
@@ -394,17 +401,84 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 	    (error
 	     (setq continue nil))))))))
 
-(defun elisa-find-similar (text)
-  "Find similar to TEXT results."
-  (let ((embedding (llm-embedding elisa-embeddings-provider text)))
-    (flatten-tree
+(defun elisa-find-similar (text collections)
+  "Find similar to TEXT results in COLLECTIONS."
+  (message "searching in collected data")
+  (let* ((rowids (mapcar
+		  #'car
+		  (sqlite-select
+		   elisa-db
+		   (format "select rowid from data where collection_id in
+ (
+SELECT rowid FROM collections WHERE name IN %s
+);" (elisa-sqlite-format-string-list collections)))))
+	 (query (format "WITH
+vector_search AS (
+  SELECT rowid, distance
+  FROM data_embeddings
+  WHERE vss_search(embedding, %s)
+  ORDER BY distance ASC
+  LIMIT 40
+),
+semantic_search AS (
+  SELECT rowid, RANK () OVER (ORDER BY distance ASC) AS rank
+  FROM vector_search
+  WHERE rowid IN %s
+  ORDER BY distance ASC
+  LIMIT 20
+),
+keyword_search AS (
+  SELECT rowid, RANK () OVER (ORDER BY bm25(data_fts) ASC) AS rank
+  FROM data_fts
+  WHERE rowid in %s and data_fts MATCH '%s'
+  ORDER BY bm25(data_fts) ASC
+  LIMIT 20
+),
+hybrid_search AS (
+SELECT
+  COALESCE(semantic_search.rowid, keyword_search.rowid) AS rowid,
+  COALESCE(1.0 / (60 + semantic_search.rank), 0.0) +
+  COALESCE(1.0 / (60 + keyword_search.rank), 0.0) AS score
+FROM semantic_search
+FULL OUTER JOIN keyword_search ON semantic_search.rowid = keyword_search.rowid
+ORDER BY score DESC
+LIMIT %d
+)
+SELECT
+  hybrid_search.rowid
+FROM hybrid_search
+;
+"
+			(elisa-vector-to-sqlite
+			 (llm-embedding elisa-embeddings-provider text))
+			(elisa-sqlite-format-int-list rowids)
+			(elisa-sqlite-format-int-list rowids)
+			(elisa-fts-query text)
+			(elisa-get-limit)))
+	 (raw-ids (mapcar #'car (sqlite-select elisa-db query)))
+	 (ids (if elisa-reranker-enabled
+		  (elisa-rerank text raw-ids)
+		(take elisa-limit raw-ids))))
+    (mapc
+     (lambda (row)
+       (when-let ((kind (cl-first row))
+		  (path (cl-second row))
+		  (text (cl-third row)))
+	 (pcase kind
+	   ("web"
+	    (ellama-context-add-webpage-quote-noninteractive path path text))
+	   ("file"
+	    (ellama-context-add-file-quote-noninteractive path text))
+	   ("info"
+	    (ellama-context-add-info-node-quote-noninteractive path text)))))
      (sqlite-select
       elisa-db
       (format
-       "select * from info where rowid in
-(select rowid from elisa_embeddings where vss_search(embedding,%s) limit %d);"
-       (elisa-vector-to-sqlite embedding)
-       elisa-limit)))))
+       "SELECT k.name, d.path, d.data
+FROM data AS d
+LEFT JOIN kinds k ON k.rowid = d.kind_id
+WHERE d.rowid in %s;"
+       (elisa-sqlite-format-int-list ids))))))
 
 (defun elisa--split-by (func)
   "Split buffer content to list by FUNC."
@@ -695,57 +769,7 @@ Return sqlite query that extract data for adding to context."
 			      rowid (elisa-sqlite-escape chunk))))))
 	       (elisa-extact-webpage-chunks url))
 	      (cl-incf collected-pages)))
-	  urls)
-    (message "searching in collected data")
-    (let* ((rowids (mapcar
-		    #'car
-		    (sqlite-select
-		     elisa-db
-		     (format "select rowid from data where collection_id = %s;" collection-id))))
-	   (query (format "WITH
-vector_search AS (
-  SELECT rowid, distance
-  FROM data_embeddings
-  WHERE vss_search(embedding, %s)
-  ORDER BY distance ASC
-  LIMIT 40
-),
-semantic_search AS (
-  SELECT rowid, RANK () OVER (ORDER BY distance ASC) AS rank
-  FROM vector_search
-  WHERE rowid IN %s
-  ORDER BY distance ASC
-  LIMIT 20
-),
-keyword_search AS (
-  SELECT rowid, RANK () OVER (ORDER BY bm25(data_fts) ASC) AS rank
-  FROM data_fts
-  WHERE rowid in %s and data_fts MATCH '%s'
-  ORDER BY bm25(data_fts) ASC
-  LIMIT 20
-),
-hybrid_search AS (
-SELECT
-  COALESCE(semantic_search.rowid, keyword_search.rowid) AS rowid,
-  COALESCE(1.0 / (60 + semantic_search.rank), 0.0) +
-  COALESCE(1.0 / (60 + keyword_search.rank), 0.0) AS score
-FROM semantic_search
-FULL OUTER JOIN keyword_search ON semantic_search.rowid = keyword_search.rowid
-ORDER BY score DESC
-LIMIT %d
-)
-SELECT
-  hybrid_search.rowid
-FROM hybrid_search
-;
-"
-			  (elisa-vector-to-sqlite
-			   (llm-embedding elisa-embeddings-provider prompt))
-			  (elisa-sqlite-format-int-list rowids)
-			  (elisa-sqlite-format-int-list rowids)
-			  (elisa-fts-query prompt)
-			  (elisa-get-limit))))
-      query)))
+	  urls)))
 
 ;;;###autoload
 (defun elisa-web-search (prompt)
@@ -753,8 +777,9 @@ FROM hybrid_search
   (interactive "sAsk elisa with web search: ")
   (message "searching the web")
   (elisa--async-do (lambda () (elisa--web-search prompt))
-		   (lambda (query)
-		     (elisa-retrieve-ask query prompt))))
+		   (lambda (_)
+		     (elisa-find-similar prompt (list prompt))
+		     (ellama-chat prompt nil :provider elisa-chat-provider))))
 
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
@@ -886,27 +911,13 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
   (elisa--async-do 'elisa-parse-all-manuals))
 
 ;;;###autoload
-(defun elisa-chat (prompt)
-  "Send PROMPT to elisa."
+(defun elisa-chat (prompt &optional collections)
+  "Send PROMPT to elisa.
+Find similar quotes in COLLECTIONS and add it to context."
   (interactive "sAsk elisa: ")
-  (if (and elisa-prompt-rewriting-enabled ellama--current-session-id)
-      (ellama-chain
-       prompt
-       `((:provider elisa-chat-provider
-		    :session ,(with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
-				ellama--current-session)
-		    :transform (lambda (s)
-				 (format elisa-rewrite-prompt-template s)))
-	 (:provider elisa-chat-provider
-		    :transform (lambda (s)
-				 (let ((unquoted (string-trim s "[ \t\n\r\"]+" "[ \t\n\r\"]+"))
-				       (infos (elisa-find-similar unquoted)))
-				   (mapc #'ellama-context-add-info-node infos)
-				   ,prompt))
-		    :chat t)))
-    (let ((infos (elisa-find-similar prompt)))
-      (mapc #'ellama-context-add-info-node infos)
-      (ellama-chat prompt nil :provider elisa-chat-provider))))
+  (let ((cols (or collections '("builtin manuals" "external manuals"))))
+    (elisa-find-similar prompt cols)
+    (ellama-chat prompt nil :provider elisa-chat-provider)))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
