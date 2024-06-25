@@ -404,17 +404,17 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 	    (error
 	     (setq continue nil))))))))
 
-(defun elisa-find-similar (text collections)
-  "Find similar to TEXT results in COLLECTIONS."
-  (message "searching in collected data")
-  (let* ((rowids (mapcar
-		  #'car
+(defun elisa--find-similar (text collections)
+  "Find similar to TEXT results in COLLECTIONS.
+Return sqlite query. For asyncronous execution."
+  (let* ((rowids (flatten-tree
 		  (sqlite-select
 		   elisa-db
 		   (format "select rowid from data where collection_id in
  (
 SELECT rowid FROM collections WHERE name IN %s
-);" (elisa-sqlite-format-string-list collections)))))
+);"
+			   (elisa-sqlite-format-string-list collections)))))
 	 (query (format "WITH
 vector_search AS (
   SELECT rowid, distance
@@ -457,31 +457,16 @@ FROM hybrid_search
 			(elisa-sqlite-format-int-list rowids)
 			(elisa-sqlite-format-int-list rowids)
 			(elisa-fts-query text)
-			(elisa-get-limit)))
-	 (raw-ids (mapcar #'car (sqlite-select elisa-db query)))
-	 (ids (if elisa-reranker-enabled
-		  (elisa-rerank text raw-ids)
-		(take elisa-limit raw-ids))))
-    (mapc
-     (lambda (row)
-       (when-let ((kind (cl-first row))
-		  (path (cl-second row))
-		  (text (cl-third row)))
-	 (pcase kind
-	   ("web"
-	    (ellama-context-add-webpage-quote-noninteractive path path text))
-	   ("file"
-	    (ellama-context-add-file-quote-noninteractive path text))
-	   ("info"
-	    (ellama-context-add-info-node-quote-noninteractive path text)))))
-     (sqlite-select
-      elisa-db
-      (format
-       "SELECT k.name, d.path, d.data
-FROM data AS d
-LEFT JOIN kinds k ON k.rowid = d.kind_id
-WHERE d.rowid in %s;"
-       (elisa-sqlite-format-int-list ids))))))
+			(elisa-get-limit))))
+    query))
+
+(defun elisa-find-similar (text collections on-done)
+  "Find similar to TEXT results in COLLECTIONS.
+Evaluate ON-DONE with result."
+  (message "searching in collected data")
+  (elisa--async-do
+   (lambda () (elisa--find-similar text collections))
+   on-done))
 
 (defun elisa--split-by (func)
   "Split buffer content to list by FUNC."
@@ -779,38 +764,43 @@ Return sqlite query that extract data for adding to context."
   "Search the web for PROMPT."
   (interactive "sAsk elisa with web search: ")
   (message "searching the web")
-  (elisa--async-do (lambda () (elisa--web-search prompt))
-		   (lambda (_)
-		     (elisa-find-similar prompt (list prompt))
-		     (ellama-chat prompt nil :provider elisa-chat-provider))))
+  (elisa--async-do
+   (lambda () (elisa--web-search prompt))
+   (lambda (_)
+     (elisa-find-similar
+      prompt (list prompt)
+      (lambda (query) (elisa-retrieve-ask query prompt))))))
 
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
-  (let* ((raw-ids (mapcar #'car (sqlite-select elisa-db query)))
-	 (ids (if elisa-reranker-enabled
-		  (elisa-rerank prompt raw-ids)
-		(take elisa-limit raw-ids))))
-    (mapc
-     (lambda (row)
-       (when-let ((kind (cl-first row))
-		  (path (cl-second row))
-		  (text (cl-third row)))
-	 (pcase kind
-	   ("web"
-	    (ellama-context-add-webpage-quote-noninteractive path path text))
-	   ("file"
-	    (ellama-context-add-file-quote-noninteractive path text))
-	   ("info"
-	    (ellama-context-add-info-node-quote-noninteractive path text)))))
-     (sqlite-select
-      elisa-db
-      (format
-       "SELECT k.name, d.path, d.data
+  (elisa--async-do
+   (lambda () (let* ((raw-ids (flatten-tree (sqlite-select elisa-db query)))
+		     (ids (if elisa-reranker-enabled
+			      (elisa-rerank prompt raw-ids)
+			    (take elisa-limit raw-ids))))
+		(sqlite-select
+		 elisa-db
+		 (format
+		  "SELECT k.name, d.path, d.data
 FROM data AS d
 LEFT JOIN kinds k ON k.rowid = d.kind_id
 WHERE d.rowid in %s;"
-       (elisa-sqlite-format-int-list ids))))
-    (ellama-chat prompt nil :provider elisa-chat-provider)))
+		  (elisa-sqlite-format-int-list ids)))))
+   (lambda (result)
+     (mapc
+      (lambda (row)
+	(when-let ((kind (cl-first row))
+		   (path (cl-second row))
+		   (text (cl-third row)))
+	  (pcase kind
+	    ("web"
+	     (ellama-context-add-webpage-quote-noninteractive path path text))
+	    ("file"
+	     (ellama-context-add-file-quote-noninteractive path text))
+	    ("info"
+	     (ellama-context-add-info-node-quote-noninteractive path text)))))
+      result)
+     (ellama-chat prompt nil :provider elisa-chat-provider))))
 
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
@@ -925,8 +915,9 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 Find similar quotes in COLLECTIONS and add it to context."
   (interactive "sAsk elisa: ")
   (let ((cols (or collections '("builtin manuals" "external manuals"))))
-    (elisa-find-similar prompt cols)
-    (ellama-chat prompt nil :provider elisa-chat-provider)))
+    (elisa-find-similar
+     prompt cols
+     (lambda (query) (elisa-retrieve-ask query prompt)))))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
