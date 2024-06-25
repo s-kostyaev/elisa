@@ -268,6 +268,7 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Initialize elisa DB."
   (if (not (file-exists-p (elisa--vss-path)))
       (warn "Please run M-x `elisa-download-sqlite-vss' to use this package")
+    (sqlite-pragma db "PRAGMA journal_mode=WAL;")
     (sqlite-load-extension
      db
      (elisa--vector-path))
