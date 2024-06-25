@@ -879,7 +879,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		 (elisa--reopen-db)
 		 (when on-done
 		   (funcall on-done res))
-		 (message "%s done."
+		 (message "%.25s done."
 			  func))))
 
 (defun elisa-extact-webpage-chunks (url)
