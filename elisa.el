@@ -168,6 +168,16 @@ If set, all quotes with similarity less than threshold will be filtered out."
   :group 'tools
   :type 'integer)
 
+(defcustom elisa-ignore-patterns-files '(".gitignore" ".ignore" ".rgignore")
+  "Files with patterns to ignore during file parsing."
+  :group 'tools
+  :type '(list string))
+
+(defcustom elisa-ignore-invisible-files t
+  "Ignore invisible files and directories during file parsing."
+  :group 'tools
+  :type 'boolean)
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
   (cond  ((string-equal system-type "darwin")
@@ -578,6 +588,76 @@ than T, it will be packed into single semantic chunk."
 		     (string-trim s)
 		   ""))
 	       (nreverse result))))))
+
+(defun elisa--gitignore-to-elisp-regexp (pattern)
+  "Convert a .gitignore PATTERN to an Emacs Lisp regexp."
+  (let ((result "")
+        (i 0)
+        (len (length pattern)))
+    (while (< i len)
+      (let ((char (aref pattern i)))
+        (cond
+         ;; Escape special regex characters
+         ((string-match-p "[.?+*^$(){}\\[\\]\\\\]" (char-to-string char))
+          (setq result (concat result "\\" (char-to-string char))))
+         ;; Handle ** for any number of directories
+         ((and (> len (+ i 1))
+               (char-equal char ?*)
+               (char-equal (aref pattern (+ i 1)) ?*))
+          (setq result (concat result ".*"))
+          (setq i (+ i 1)))
+         ;; Handle * for any number of characters except /
+         ((char-equal char ?*)
+          (setq result (concat result "[^/]*")))
+         ;; Handle ? for a single character except /
+         ((char-equal char ??)
+          (setq result (concat result "[^/]")))
+         ;; Handle negation
+         ((char-equal char ?!)
+          (setq result (concat result "^")))
+         ;; Handle directory separator
+         ((char-equal char ?/)
+          (setq result (concat result "/")))
+         ;; Default case: add the character as is
+         (t
+          (setq result (concat result (char-to-string char))))))
+      (setq i (+ i 1)))
+    ;; prevent false-positive partial matches
+    (concat result "$")))
+
+(defun elisa--read-ignore-file-regexps (directory)
+  "Read ignore patterns from `elisa-ignore-patterns-files' in DIRECTORY."
+  (mapcar #'elisa--gitignore-to-elisp-regexp
+	  (flatten-tree
+	   (mapcar (lambda (file)
+		     (let ((filepath (expand-file-name file directory)))
+		       (when (file-exists-p filepath)
+			 (with-temp-buffer
+			   (insert-file-contents filepath)
+			   (split-string (buffer-string) "\n" t)))))
+		   elisa-ignore-patterns-files))))
+
+(defun elisa--text-file-p (filename)
+  "Check if FILENAME contain text."
+  (or (when (get-file-buffer filename) t) ;; if file opened assume it text
+      (with-current-buffer (find-file-noselect filename t t)
+	(prog1
+	    ;; if there is null byte in file, file is binary
+	    (not (re-search-forward "\0" nil t 1))
+	  (kill-buffer)))))
+
+(defun elisa--file-list (directory)
+  "List of files to parse in DIRECTORY."
+  (let ((ignore-regexps (elisa--read-ignore-file-regexps directory)))
+    (when elisa-ignore-invisible-files
+      (push "$\\.[^/]*" ignore-regexps)
+      (push "/\\.[^/]*" ignore-regexps))
+    (seq-filter (lambda (file)
+		  (and (not (seq-some (lambda (regexp)
+					(string-match-p regexp file))
+				      ignore-regexps))
+		       (elisa--text-file-p file)))
+		(directory-files-recursively directory ".*"))))
 
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
