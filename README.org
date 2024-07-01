@@ -119,6 +119,7 @@ The following variables can be customized for ELISA:
 - ~elisa-find-executable~: Path to find executable.
 - ~elisa-tar-executable~: Path to tar executable.
 - ~elisa-sqlite-vss-version~: Sqlite VSS version.
+- ~elisa-semantic-split-threshold~: Cosine similarity threshold for semantic splitting.
 
 ** Contributions
 
