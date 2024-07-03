@@ -262,6 +262,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Generate sql for fill kinds table."
   "insert into kinds (name) values ('web'), ('file'), ('info') on conflict do nothing;")
 
+(defun elisa-files-create-table-sql ()
+  "Generate sql for create files table."
+  "create table if not exists files (path text unique, hash text)")
+
 (defun elisa-data-create-table-sql ()
   "Generate sql for create data table."
   "create table if not exists data (
@@ -290,6 +294,7 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
     (sqlite-execute db (elisa-collections-create-table-sql))
     (sqlite-execute db (elisa-kinds-create-table-sql))
     (sqlite-execute db (elisa-fill-kinds-sql))
+    (sqlite-execute db (elisa-files-create-table-sql))
     (sqlite-execute db (elisa-data-create-table-sql))
     (sqlite-execute db (elisa-data-embeddings-create-table-sql))
     (sqlite-execute db (elisa-data-fts-create-table-sql))))
@@ -658,6 +663,89 @@ than T, it will be packed into single semantic chunk."
 				      ignore-regexps))
 		       (elisa--text-file-p file)))
 		(directory-files-recursively directory ".*"))))
+
+(defun elisa-parse-file (collection-id path &optional force)
+  "Parse file PATH for COLLECTION-ID.
+When FORCE parse even if already parsed."
+  (let* ((opened (get-file-buffer path))
+	 (buf (find-file-noselect path t t))
+	 (hash (secure-hash 'sha256 buf))
+	 (prev-hash (flatten-tree (sqlite-select
+				   elisa-db
+				   (format "select hash from files where path = '%s';"
+					   (elisa-sqlite-escape path))))))
+    (when (or force
+	      (not prev-hash)
+	      (not (string-equal hash prev-hash)))
+      (with-current-buffer buf
+	(let ((chunks (elisa-split-semantically))
+	      (row-ids (flatten-tree (sqlite-select
+				      elisa-db
+				      (format "select rowid from data where path = '%s';"
+					      (elisa-sqlite-escape path)))))
+	      (kind-id (caar (sqlite-select
+			      elisa-db
+			      "select rowid from kinds where name = 'file';"))))
+	  ;; remove old data
+	  (when row-ids
+	    (sqlite-execute
+	     elisa-db
+	     (format "delete from data_fts where rowid in %s;"
+		     (elisa-sqlite-format-int-list row-ids)))
+	    (sqlite-execute
+	     elisa-db
+	     (format "delete from data_embeddings where rowid in %s;"
+		     (elisa-sqlite-format-int-list row-ids)))
+	    (sqlite-execute
+	     elisa-db
+	     (format "delete from data where rowid in %s;"
+		     (elisa-sqlite-format-int-list row-ids))))
+	  (when prev-hash
+	    (sqlite-execute
+	     elisa-db
+	     (format "delete from files where path = '%s';"
+		     (elisa-sqlite-escape path))))
+	  ;; add new data
+	  (mapc
+	   (lambda (text)
+	     (let* ((hash (secure-hash 'sha256 text))
+		    (embedding (llm-embedding elisa-embeddings-provider text))
+		    (rowid
+		     (if-let ((rowid (caar (sqlite-select
+					    elisa-db
+					    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+						    kind-id collection-id
+						    (elisa-sqlite-escape path) hash)))))
+			 nil
+		       (sqlite-execute
+			elisa-db
+			(format
+			 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+			 kind-id collection-id
+			 (elisa-sqlite-escape path) hash (elisa-sqlite-escape text)))
+		       (caar (sqlite-select
+			      elisa-db
+			      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+				      kind-id collection-id
+				      (elisa-sqlite-escape path) hash))))))
+	       (when rowid
+		 (sqlite-execute
+		  elisa-db
+		  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+			  rowid (elisa-vector-to-sqlite embedding)))
+		 (sqlite-execute
+		  elisa-db
+		  (format "insert into data_fts(rowid, data) values (%s, '%s');"
+			  rowid (elisa-sqlite-escape text))))))
+	   chunks)
+	  ;; save hash to files table
+	  (sqlite-execute
+	   elisa-db
+	   (format "insert into files (path, hash) values ('%s', '%s');"
+		   (elisa-sqlite-escape path) hash)))))
+    ;; kill buffer if it was not open before parsing
+    (when (not opened)
+      (kill-buffer buf))))
 
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
