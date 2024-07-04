@@ -668,12 +668,12 @@ than T, it will be packed into single semantic chunk."
   "Parse file PATH for COLLECTION-ID.
 When FORCE parse even if already parsed."
   (let* ((opened (get-file-buffer path))
-	 (buf (find-file-noselect path t t))
+	 (buf (or opened (find-file-noselect path t t)))
 	 (hash (secure-hash 'sha256 buf))
-	 (prev-hash (flatten-tree (sqlite-select
-				   elisa-db
-				   (format "select hash from files where path = '%s';"
-					   (elisa-sqlite-escape path))))))
+	 (prev-hash (caar (sqlite-select
+			   elisa-db
+			   (format "select hash from files where path = '%s';"
+				   (elisa-sqlite-escape path))))))
     (when (or force
 	      (not prev-hash)
 	      (not (string-equal hash prev-hash)))
@@ -746,6 +746,26 @@ When FORCE parse even if already parsed."
     ;; kill buffer if it was not open before parsing
     (when (not opened)
       (kill-buffer buf))))
+
+(defun elisa-parse-directory (dir)
+  "Parse DIR as new collection syncronously."
+  (interactive "DSelect directory: ")
+  (setq dir (expand-file-name dir))
+  (let ((collection-id (progn
+			 (sqlite-execute
+			  elisa-db
+			  (format
+			   "insert into collections (name) values ('%s') on conflict do nothing;"
+			   (elisa-sqlite-escape dir)))
+			 (caar (sqlite-select
+				elisa-db
+				(format
+				 "select rowid from collections where name = '%s';"
+				 (elisa-sqlite-escape dir)))))))
+    (mapc (lambda (file)
+	    (message "parsing %s" file)
+	    (elisa-parse-file collection-id file))
+	  (elisa--file-list dir))))
 
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
@@ -849,14 +869,15 @@ You can customize `elisa-searxng-url' to use non local instance."
 
 (defun elisa--do-rerank-request (prompt ids)
   "Call rerank service for PROMPT and IDS."
-  (seq--into-list
-   (alist-get 'data
-	      (plz 'post (format "%s/api/v1/rerank"
-				 (string-remove-suffix "/" elisa-reranker-url))
-		:headers `(("Content-Type" . "application/json"))
-		:body-type 'text
-		:body (elisa--rerank-request prompt ids)
-		:as #'json-read))))
+  (when ids
+    (seq--into-list
+     (alist-get 'data
+		(plz 'post (format "%s/api/v1/rerank"
+				   (string-remove-suffix "/" elisa-reranker-url))
+		  :headers `(("Content-Type" . "application/json"))
+		  :body-type 'text
+		  :body (elisa--rerank-request prompt ids)
+		  :as #'json-read)))))
 
 (defun elisa-rerank (prompt ids)
   "Rerank IDS according to PROMPT and return top `elisa-limit' IDS."
@@ -946,28 +967,30 @@ Return sqlite query that extract data for adding to context."
 		     (ids (if elisa-reranker-enabled
 			      (elisa-rerank prompt raw-ids)
 			    (take elisa-limit raw-ids))))
-		(sqlite-select
-		 elisa-db
-		 (format
-		  "SELECT k.name, d.path, d.data
+		(when ids
+		  (sqlite-select
+		   elisa-db
+		   (format
+		    "SELECT k.name, d.path, d.data
 FROM data AS d
 LEFT JOIN kinds k ON k.rowid = d.kind_id
 WHERE d.rowid in %s;"
-		  (elisa-sqlite-format-int-list ids)))))
+		    (elisa-sqlite-format-int-list ids))))))
    (lambda (result)
-     (mapc
-      (lambda (row)
-	(when-let ((kind (cl-first row))
-		   (path (cl-second row))
-		   (text (cl-third row)))
-	  (pcase kind
-	    ("web"
-	     (ellama-context-add-webpage-quote-noninteractive path path text))
-	    ("file"
-	     (ellama-context-add-file-quote-noninteractive path text))
-	    ("info"
-	     (ellama-context-add-info-node-quote-noninteractive path text)))))
-      result)
+     (if result (mapc
+		 (lambda (row)
+		   (when-let ((kind (cl-first row))
+			      (path (cl-second row))
+			      (text (cl-third row)))
+		     (pcase kind
+		       ("web"
+			(ellama-context-add-webpage-quote-noninteractive path path text))
+		       ("file"
+			(ellama-context-add-file-quote-noninteractive path text))
+		       ("info"
+			(ellama-context-add-info-node-quote-noninteractive path text)))))
+		 result)
+       (ellama-context-add-text "No related documents found."))
      (ellama-chat prompt nil :provider elisa-chat-provider))))
 
 (defun elisa-get-builtin-manuals ()
@@ -1039,6 +1062,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		  ,(async-inject-variables "elisa-breakpoint-threshold-amount")
 		  ,(async-inject-variables "elisa-pandoc-executable")
 		  ,(async-inject-variables "ellama-long-lines-length")
+		  ,(async-inject-variables "elisa-reranker-enabled")
 		  ,(async-inject-variables "load-path")
 		  (require 'elisa)
 		  (,func))
