@@ -679,27 +679,16 @@ When FORCE parse even if already parsed."
 	      (not (string-equal hash prev-hash)))
       (with-current-buffer buf
 	(let ((chunks (elisa-split-semantically))
-	      (row-ids (flatten-tree (sqlite-select
-				      elisa-db
-				      (format "select rowid from data where path = '%s';"
-					      (elisa-sqlite-escape path)))))
+	      (old-row-ids
+	       (flatten-tree (sqlite-select
+			      elisa-db
+			      (format "select rowid from data where path = '%s';"
+				      (elisa-sqlite-escape path)))))
+	      (row-ids nil)
 	      (kind-id (caar (sqlite-select
 			      elisa-db
 			      "select rowid from kinds where name = 'file';"))))
 	  ;; remove old data
-	  (when row-ids
-	    (sqlite-execute
-	     elisa-db
-	     (format "delete from data_fts where rowid in %s;"
-		     (elisa-sqlite-format-int-list row-ids)))
-	    (sqlite-execute
-	     elisa-db
-	     (format "delete from data_embeddings where rowid in %s;"
-		     (elisa-sqlite-format-int-list row-ids)))
-	    (sqlite-execute
-	     elisa-db
-	     (format "delete from data where rowid in %s;"
-		     (elisa-sqlite-format-int-list row-ids))))
 	  (when prev-hash
 	    (sqlite-execute
 	     elisa-db
@@ -709,14 +698,15 @@ When FORCE parse even if already parsed."
 	  (mapc
 	   (lambda (text)
 	     (let* ((hash (secure-hash 'sha256 text))
-		    (embedding (llm-embedding elisa-embeddings-provider text))
 		    (rowid
 		     (if-let ((rowid (caar (sqlite-select
 					    elisa-db
 					    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
 						    kind-id collection-id
 						    (elisa-sqlite-escape path) hash)))))
-			 nil
+			 (progn
+			   (push rowid row-ids)
+			   nil)
 		       (sqlite-execute
 			elisa-db
 			(format
@@ -732,12 +722,20 @@ When FORCE parse even if already parsed."
 		 (sqlite-execute
 		  elisa-db
 		  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
-			  rowid (elisa-vector-to-sqlite embedding)))
+			  rowid (elisa-vector-to-sqlite
+				 (llm-embedding elisa-embeddings-provider text))))
 		 (sqlite-execute
 		  elisa-db
 		  (format "insert into data_fts(rowid, data) values (%s, '%s');"
-			  rowid (elisa-sqlite-escape text))))))
+			  rowid (elisa-sqlite-escape text)))
+		 (push rowid row-ids))))
 	   chunks)
+	  ;; remove old data
+	  (when row-ids
+	    (let ((delete-rows (cl-remove-if (lambda (id)
+					       (cl-find id row-ids))
+					     old-row-ids)))
+	      (elisa--delete-data delete-rows)))
 	  ;; save hash to files table
 	  (sqlite-execute
 	   elisa-db
@@ -747,25 +745,49 @@ When FORCE parse even if already parsed."
     (when (not opened)
       (kill-buffer buf))))
 
+(defun elisa--delete-data (ids)
+  "Delete data with IDS."
+  (sqlite-execute
+   elisa-db
+   (format "delete from data_fts where rowid in %s;"
+	   (elisa-sqlite-format-int-list ids)))
+  (sqlite-execute
+   elisa-db
+   (format "delete from data_embeddings where rowid in %s;"
+	   (elisa-sqlite-format-int-list ids)))
+  (sqlite-execute
+   elisa-db
+   (format "delete from data where rowid in %s;"
+	   (elisa-sqlite-format-int-list ids))))
+
 (defun elisa-parse-directory (dir)
   "Parse DIR as new collection syncronously."
   (interactive "DSelect directory: ")
   (setq dir (expand-file-name dir))
-  (let ((collection-id (progn
-			 (sqlite-execute
-			  elisa-db
-			  (format
-			   "insert into collections (name) values ('%s') on conflict do nothing;"
-			   (elisa-sqlite-escape dir)))
-			 (caar (sqlite-select
-				elisa-db
-				(format
-				 "select rowid from collections where name = '%s';"
-				 (elisa-sqlite-escape dir)))))))
+  (let* ((collection-id (progn
+			  (sqlite-execute
+			   elisa-db
+			   (format
+			    "insert into collections (name) values ('%s') on conflict do nothing;"
+			    (elisa-sqlite-escape dir)))
+			  (caar (sqlite-select
+				 elisa-db
+				 (format
+				  "select rowid from collections where name = '%s';"
+				  (elisa-sqlite-escape dir))))))
+	 (files (elisa--file-list dir))
+	 (delete-ids (flatten-tree
+		      (sqlite-select
+		       elisa-db
+		       (format
+			"select rowid from data where collection_id = %d and path not in %s;"
+			collection-id
+			(elisa-sqlite-format-string-list files))))))
+    (elisa--delete-data delete-ids)
     (mapc (lambda (file)
 	    (message "parsing %s" file)
 	    (elisa-parse-file collection-id file))
-	  (elisa--file-list dir))))
+	  files)))
 
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
