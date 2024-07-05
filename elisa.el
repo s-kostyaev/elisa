@@ -178,6 +178,11 @@ If set, all quotes with similarity less than threshold will be filtered out."
   :group 'tools
   :type 'boolean)
 
+(defcustom elisa-enabled-collections '("builtin manuals" "external manuals")
+  "Enabled collections for elisa chat."
+  :group 'tools
+  :type '(list string))
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system."
   (cond  ((string-equal system-type "darwin")
@@ -1133,11 +1138,65 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
   (elisa--async-do 'elisa-parse-all-manuals))
 
 ;;;###autoload
+(defun elisa-disable-collection (&optional collection)
+  "Disable COLLECTION."
+  (interactive)
+  (let ((col (or collection
+		 (completing-read
+		  "Disable collection: "
+		  elisa-enabled-collections))))
+    (setq elisa-enabled-collections
+	  (cl-remove col elisa-enabled-collections :test #'string=))))
+
+;;;###autoload
+(defun elisa-enable-collection (&optional collection)
+  "Enable COLLECTION."
+  (interactive)
+  (let ((col (or collection
+		 (completing-read
+		  "Enable collection: "
+		  (flatten-tree
+		   (sqlite-select
+		    elisa-db
+		    "select name from collections;"))))))
+    (push col elisa-enabled-collections)))
+
+;;;###autoload
+(defun elisa-remove-collection (&optional collection)
+  "Remove COLLECTION."
+  (interactive)
+  (let* ((col (or collection
+		  (completing-read
+		   "Enable collection: "
+		   (flatten-tree
+		    (sqlite-select
+		     elisa-db
+		     "select name from collections;")))))
+	 (collection-id (caar (sqlite-select
+			       elisa-db
+			       (format
+				"select rowid from collections where name = '%s';"
+				(elisa-sqlite-escape col)))))
+	 (delete-ids (flatten-tree
+		      (sqlite-select
+		       elisa-db
+		       (format
+			"select rowid from data where collection_id = %d;"
+			collection-id)))))
+    (elisa-disable-collection col)
+    (elisa--delete-data delete-ids)
+    (sqlite-execute
+     elisa-db
+     (format
+      "delete from collections where rowid = %d;"
+      collection-id))))
+
+;;;###autoload
 (defun elisa-chat (prompt &optional collections)
   "Send PROMPT to elisa.
 Find similar quotes in COLLECTIONS and add it to context."
   (interactive "sAsk elisa: ")
-  (let ((cols (or collections '("builtin manuals" "external manuals"))))
+  (let ((cols (or collections elisa-enabled-collections)))
     (elisa-find-similar
      prompt cols
      (lambda (query) (elisa-retrieve-ask query prompt)))))
