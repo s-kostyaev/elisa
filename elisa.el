@@ -1142,6 +1142,22 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
   (elisa--async-do 'elisa-parse-all-manuals))
 
 ;;;###autoload
+(defun elisa-reparse-current-collection ()
+  "Incrementally reparse current directory collection.
+It does nothing if buffer file not inside one of existing collections."
+  (interactive)
+  (when-let* ((collections (flatten-tree
+			    (sqlite-select
+			     elisa-db
+			     "select name from collections;")))
+	      (dirs (cl-remove-if-not #'file-directory-p collections))
+	      (file (buffer-file-name))
+	      (collection (cl-find-if (lambda (dir)
+					(file-in-directory-p file dir))
+				      dirs)))
+    (elisa-async-parse-directory collection)))
+
+;;;###autoload
 (defun elisa-disable-collection (&optional collection)
   "Disable COLLECTION."
   (interactive)
