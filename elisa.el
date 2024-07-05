@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.9.10") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.11.1") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
 ;; Version: 0.1.4
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -53,11 +53,15 @@
 (require 'plz)
 (require 'json)
 
+(defgroup elisa nil
+  "RAG implementation for `ellama'."
+  :group 'tools)
+
 (defcustom elisa-embeddings-provider (progn (require 'llm-ollama)
 					    (make-llm-ollama
 					     :embedding-model "nomic-embed-text"))
   "Embeddings provider to generate embeddings."
-  :group 'tools
+  :group 'elisa
   :type '(sexp :validate 'cl-struct-p))
 
 (defcustom elisa-chat-provider (progn (require 'llm-ollama)
@@ -65,44 +69,44 @@
 				       :chat-model "sskostyaev/openchat:8k-rag"
 				       :embedding-model "nomic-embed-text"))
   "Chat provider."
-  :group 'tools
+  :group 'elisa
   :type '(sexp :validate 'cl-struct-p))
 
 (defcustom elisa-db-directory (file-truename
 			       (file-name-concat
 				user-emacs-directory "elisa"))
   "Directory for elisa database."
-  :group 'tools
+  :group 'elisa
   :type 'directory)
 
 (defcustom elisa-limit 5
   "Count quotes to pass into llm context for answer."
-  :group 'tools
+  :group 'elisa
   :type 'integer)
 
 (defcustom elisa-find-executable (executable-find "find")
   "Path to find executable."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-tar-executable (executable-find "tar")
   "Path to tar executable."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-sqlite-vss-version "v0.1.2"
   "Sqlite VSS version."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-semantic-split-function 'elisa-split-by-paragraph
   "Function for semantic text split."
-  :group 'tools
+  :group 'elisa
   :type 'function)
 
 (defcustom elisa-prompt-rewriting-enabled t
   "Enable prompt rewriting for better retrieving."
-  :group 'tools
+  :group 'elisa
   :type 'boolean)
 
 (defcustom elisa-rewrite-prompt-template
@@ -112,75 +116,75 @@ concise and useful without additional context. Response with
 prompt only. User prompt:
 %s"
   "Prompt template for prompt rewriting."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-searxng-url "http://localhost:8080/"
   "Searxng url for web search.  Json format should be enabled for this instance."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-pandoc-executable "pandoc"
   "Path to pandoc executable."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-webpage-extraction-function 'elisa-get-webpage-buffer
   "Function to get buffer with webpage content."
-  :group 'tools
+  :group 'elisa
   :type 'function)
 
 (defcustom elisa-web-search-function 'elisa-search-duckduckgo
   "Function to search the web.
 Function should get prompt and return list of urls."
-  :group 'tools
+  :group 'elisa
   :type 'function)
 
 (defcustom elisa-web-pages-limit 10
   "Limit of web pages to parse during web search."
-  :group 'tools
+  :group 'elisa
   :type 'integer)
 
 (defcustom elisa-breakpoint-threshold-amount 0.4
   "Breakpoint threshold amount.
 Increase it if you need decrease semantic split granularity."
-  :group 'tools
+  :group 'elisa
   :type 'float)
 
 (defcustom elisa-reranker-enabled t
   "Enable reranker to improve retrieving quality."
-  :group 'tools
+  :group 'elisa
   :type 'boolean)
 
 (defcustom elisa-reranker-url "http://127.0.0.1:8787/"
   "Reranker service url."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-reranker-similarity-threshold 0
   "Reranker similarity threshold.
 If set, all quotes with similarity less than threshold will be filtered out."
-  :group 'tools
+  :group 'elisa
   :type 'string)
 
 (defcustom elisa-reranker-limit 20
   "Number of quotes for send to reranker."
-  :group 'tools
+  :group 'elisa
   :type 'integer)
 
 (defcustom elisa-ignore-patterns-files '(".gitignore" ".ignore" ".rgignore")
   "Files with patterns to ignore during file parsing."
-  :group 'tools
+  :group 'elisa
   :type '(list string))
 
 (defcustom elisa-ignore-invisible-files t
   "Ignore invisible files and directories during file parsing."
-  :group 'tools
+  :group 'elisa
   :type 'boolean)
 
 (defcustom elisa-enabled-collections '("builtin manuals" "external manuals")
   "Enabled collections for elisa chat."
-  :group 'tools
+  :group 'elisa
   :type '(list string))
 
 (defun elisa-sqlite-vss-download-url ()
