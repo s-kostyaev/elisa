@@ -789,6 +789,14 @@ When FORCE parse even if already parsed."
 	    (elisa-parse-file collection-id file))
 	  files)))
 
+;;;###autoload
+(defun elisa-async-parse-directory (dir)
+  "Parse DIR as new collection asyncronously."
+  (interactive "DSelect directory: ")
+  (elisa--async-do (lambda ()
+		     (elisa-parse-directory
+		      (expand-file-name dir)))))
+
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
   (let* ((url (format "https://duckduckgo.com/html/?q=%s" (url-hexify-string prompt)))
@@ -1069,32 +1077,33 @@ WHERE d.rowid in %s;"
 (defun elisa--async-do (func &optional on-done)
   "Do FUNC asyncronously.
 Call ON-DONE callback with result as an argument after FUNC evaluation done."
-  (async-start `(lambda ()
-		  ,(async-inject-variables "elisa-embeddings-provider")
-		  ,(async-inject-variables "elisa-db-directory")
-		  ,(async-inject-variables "elisa-find-executable")
-		  ,(async-inject-variables "elisa-tar-executable")
-		  ,(async-inject-variables "elisa-prompt-rewriting-enabled")
-		  ,(async-inject-variables "elisa-rewrite-prompt-template")
-		  ,(async-inject-variables "elisa-semantic-split-function")
-		  ,(async-inject-variables "elisa-webpage-extraction-function")
-		  ,(async-inject-variables "elisa-web-search-function")
-		  ,(async-inject-variables "elisa-searxng-url")
-		  ,(async-inject-variables "elisa-web-pages-limit")
-		  ,(async-inject-variables "elisa-breakpoint-threshold-amount")
-		  ,(async-inject-variables "elisa-pandoc-executable")
-		  ,(async-inject-variables "ellama-long-lines-length")
-		  ,(async-inject-variables "elisa-reranker-enabled")
-		  ,(async-inject-variables "load-path")
-		  (require 'elisa)
-		  (,func))
-	       (lambda (res)
-		 (sqlite-close elisa-db)
-		 (elisa--reopen-db)
-		 (when on-done
-		   (funcall on-done res))
-		 (message "%.25s done."
-			  func))))
+  (let ((command real-this-command))
+    (async-start `(lambda ()
+		    ,(async-inject-variables "elisa-embeddings-provider")
+		    ,(async-inject-variables "elisa-db-directory")
+		    ,(async-inject-variables "elisa-find-executable")
+		    ,(async-inject-variables "elisa-tar-executable")
+		    ,(async-inject-variables "elisa-prompt-rewriting-enabled")
+		    ,(async-inject-variables "elisa-rewrite-prompt-template")
+		    ,(async-inject-variables "elisa-semantic-split-function")
+		    ,(async-inject-variables "elisa-webpage-extraction-function")
+		    ,(async-inject-variables "elisa-web-search-function")
+		    ,(async-inject-variables "elisa-searxng-url")
+		    ,(async-inject-variables "elisa-web-pages-limit")
+		    ,(async-inject-variables "elisa-breakpoint-threshold-amount")
+		    ,(async-inject-variables "elisa-pandoc-executable")
+		    ,(async-inject-variables "ellama-long-lines-length")
+		    ,(async-inject-variables "elisa-reranker-enabled")
+		    ,(async-inject-variables "load-path")
+		    (require 'elisa)
+		    (,func))
+		 (lambda (res)
+		   (sqlite-close elisa-db)
+		   (elisa--reopen-db)
+		   (when on-done
+		     (funcall on-done res))
+		   (message "%.40s done."
+			    (or command func))))))
 
 (defun elisa-extact-webpage-chunks (url)
   "Extract semantic chunks for webpage fetched from URL."
