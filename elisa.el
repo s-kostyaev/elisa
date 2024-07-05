@@ -1153,16 +1153,25 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 	  (cl-remove col elisa-enabled-collections :test #'string=))))
 
 ;;;###autoload
+(defun elisa-disble-all-collections ()
+  "Disable all collections."
+  (interactive)
+  (mapc #'elisa-disable-collection elisa-enabled-collections))
+
+;;;###autoload
 (defun elisa-enable-collection (&optional collection)
   "Enable COLLECTION."
   (interactive)
   (let ((col (or collection
 		 (completing-read
 		  "Enable collection: "
-		  (flatten-tree
-		   (sqlite-select
-		    elisa-db
-		    "select name from collections;"))))))
+		  (cl-remove-if
+		   (lambda (c)
+		     (cl-find c elisa-enabled-collections :test #'string=))
+		   (flatten-tree
+		    (sqlite-select
+		     elisa-db
+		     "select name from collections;")))))))
     (push col elisa-enabled-collections)))
 
 ;;;###autoload
