@@ -1257,6 +1257,19 @@ It does nothing if buffer file not inside one of existing collections."
 			"select rowid from data where collection_id = %d;"
 			collection-id)))))
     (elisa-disable-collection col)
+    (when (file-directory-p col)
+      (let ((files
+	     (flatten-tree
+	      (sqlite-select
+	       elisa-db
+	       (format
+		"select distinct path from data where collection_id = %d;"
+		collection-id)))))
+	(sqlite-execute
+	 elisa-db
+	 (format
+	  "delete from files where path in %s;"
+	  (elisa-sqlite-format-string-list files)))))
     (elisa--delete-data delete-ids)
     (sqlite-execute
      elisa-db
