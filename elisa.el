@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.11.1") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
 ;; Version: 0.1.4
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -113,7 +113,18 @@
   "You are professional search agent. With given context and user
 prompt you need to create new prompt for search. It should be
 concise and useful without additional context. Response with
-prompt only. User prompt:
+prompt only. You should replace all words like 'this' or 'it' to
+its values to make search successful. If user prompt contains
+question your prompt should also be in form of question. For
+example:
+
+- What is pony?
+- Pony is ...
+- How to buy it?
+
+How to buy a pony?
+
+ User prompt:
 %s"
   "Prompt template for prompt rewriting."
   :group 'elisa
@@ -987,10 +998,34 @@ Return sqlite query that extract data for adding to context."
 	      (cl-incf collected-pages)))
 	  urls)))
 
+(defun elisa--rewrite-prompt (prompt action)
+  "Rewrite PROMPT if `elisa-prompt-rewriting-enabled'.
+Call ACTION with new prompt."
+  (let ((session (and ellama--current-session-id
+		      (with-current-buffer (ellama-get-session-buffer
+					    ellama--current-session-id)
+			ellama--current-session))))
+    (if (and elisa-prompt-rewriting-enabled
+	     ellama--current-session-id
+	     (string= (llm-name (ellama-session-provider session))
+		      (llm-name elisa-chat-provider)))
+	(with-current-buffer (get-buffer-create (make-temp-name "elisa"))
+	  (ellama-stream
+	   (format elisa-rewrite-prompt-template prompt)
+	   :session session
+	   :buffer (current-buffer)
+	   :provider elisa-chat-provider
+	   :on-done action))
+      (funcall action prompt))))
+
 ;;;###autoload
 (defun elisa-web-search (prompt)
   "Search the web for PROMPT."
   (interactive "sAsk elisa with web search: ")
+  (elisa--rewrite-prompt prompt #'elisa--web-search-internal))
+
+(defun elisa--web-search-internal (prompt)
+  "Search the web for PROMPT."
   (message "searching the web")
   (elisa--async-do
    (lambda () (elisa--web-search prompt))
@@ -1220,15 +1255,21 @@ It does nothing if buffer file not inside one of existing collections."
       "delete from collections where rowid = %d;"
       collection-id))))
 
+(defun elisa--gen-chat (&optional collections)
+  "Generate function for chat with elisa based on COLLECTIONS."
+  (let ((cols (or collections elisa-enabled-collections)))
+    (lambda (prompt)
+      (elisa-find-similar
+       prompt cols
+       (lambda (query) (elisa-retrieve-ask query prompt))))))
+
 ;;;###autoload
 (defun elisa-chat (prompt &optional collections)
   "Send PROMPT to elisa.
 Find similar quotes in COLLECTIONS and add it to context."
   (interactive "sAsk elisa: ")
   (let ((cols (or collections elisa-enabled-collections)))
-    (elisa-find-similar
-     prompt cols
-     (lambda (query) (elisa-retrieve-ask query prompt)))))
+    (elisa--rewrite-prompt prompt (elisa--gen-chat cols))))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
