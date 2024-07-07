@@ -109,6 +109,12 @@
   :group 'elisa
   :type 'boolean)
 
+(defcustom elisa-chat-prompt-template "Answer user query based on context above. If you can answer it partially do it. Provide list of open questions if any. Say \"not enough data\" if you can't answer user query based on provided context. User query:
+%s"
+  "Chat prompt template."
+  :group 'elisa
+  :type 'string)
+
 (defcustom elisa-rewrite-prompt-template
   "You are professional search agent. With given context and user
 prompt you need to create new prompt for search. It should be
@@ -1065,7 +1071,9 @@ WHERE d.rowid in %s;"
 			(ellama-context-add-info-node-quote-noninteractive path text)))))
 		 result)
        (ellama-context-add-text "No related documents found."))
-     (ellama-chat prompt nil :provider elisa-chat-provider))))
+     (ellama-chat
+      (format elisa-chat-prompt-template prompt)
+      nil :provider elisa-chat-provider))))
 
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
