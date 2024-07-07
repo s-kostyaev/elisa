@@ -589,36 +589,37 @@ ARGS contains keys for fine control.
 :threshold-amount K -- K is a breakpoint threshold amount.
 
 than T, it will be packed into single semantic chunk."
-  (when-let* ((func (or (plist-get args :function) elisa-semantic-split-function))
-	      (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
-	      (chunks (funcall func))
-	      (embeddings (cl-remove-if
-			   #'not
-			   (mapcar (lambda (s)
-				     (when (length> (string-trim s) 0)
-				       (llm-embedding elisa-embeddings-provider s)))
-				   chunks)))
-	      (distances (elisa--distances embeddings))
-	      (threshold (elisa-calculate-threshold k distances))
-	      (current (car chunks))
-	      (tail (cdr chunks)))
-    (let* ((result nil))
-      (mapc
-       (lambda (el)
-	 (if (<= el threshold)
-	     (setq current (concat current (car tail)))
-	   (push current result)
-	   (setq current (car tail)))
-	 (setq tail (cdr tail)))
-       distances)
-      (push current result)
-      (cl-remove-if
-       #'string-empty-p
-       (mapcar (lambda (s)
-		 (if s
-		     (string-trim s)
-		   ""))
-	       (nreverse result))))))
+  (if-let* ((func (or (plist-get args :function) elisa-semantic-split-function))
+	    (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
+	    (chunks (funcall func))
+	    (embeddings (cl-remove-if
+			 #'not
+			 (mapcar (lambda (s)
+				   (when (length> (string-trim s) 0)
+				     (llm-embedding elisa-embeddings-provider s)))
+				 chunks)))
+	    (distances (elisa--distances embeddings))
+	    (threshold (elisa-calculate-threshold k distances))
+	    (current (car chunks))
+	    (tail (cdr chunks)))
+      (let* ((result nil))
+	(mapc
+	 (lambda (el)
+	   (if (<= el threshold)
+	       (setq current (concat current (car tail)))
+	     (push current result)
+	     (setq current (car tail)))
+	   (setq tail (cdr tail)))
+	 distances)
+	(push current result)
+	(cl-remove-if
+	 #'string-empty-p
+	 (mapcar (lambda (s)
+		   (if s
+		       (string-trim s)
+		     ""))
+		 (nreverse result))))
+    (list (buffer-substring-no-properties (point-min) (point-max)))))
 
 (defun elisa--gitignore-to-elisp-regexp (pattern)
   "Convert a .gitignore PATTERN to an Emacs Lisp regexp."
