@@ -6,7 +6,7 @@
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
 ;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
-;; Version: 0.1.4
+;; Version: 0.2.0
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
 
@@ -382,68 +382,69 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 (defun elisa-parse-info-manual (name collection-name)
   "Parse info manual with NAME and save index to COLLECTION-NAME."
   (with-temp-buffer
-    (info name (current-buffer))
-    (let ((collection-id (or (caar (sqlite-select
-				    elisa-db
-				    (format
-				     "select rowid from collections where name = '%s';"
-				     collection-name)))
-			     (progn
-			       (sqlite-execute
-				elisa-db
-				(format
-				 "insert into collections (name) values ('%s');"
-				 collection-name))
-			       (caar (sqlite-select
+    (ignore-errors
+      (info name (current-buffer))
+      (let ((collection-id (or (caar (sqlite-select
 				      elisa-db
 				      (format
 				       "select rowid from collections where name = '%s';"
-				       collection-name))))))
-	  (kind-id (caar (sqlite-select
-			  elisa-db "select rowid from kinds where name = 'info';")))
-	  (continue t))
-      (while continue
-	(let* ((node-name (concat "(" (file-name-sans-extension
-				       (file-name-nondirectory Info-current-file))
-				  ") "
-				  Info-current-node))
-	       (chunks (elisa-split-semantically)))
-	  (mapc
-	   (lambda (text)
-	     (let* ((hash (secure-hash 'sha256 text))
-		    (embedding (llm-embedding elisa-embeddings-provider text))
-		    (rowid
-		     (if-let ((rowid (caar (sqlite-select
-					    elisa-db
-					    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-						    kind-id collection-id
-						    (elisa-sqlite-escape node-name) hash)))))
-			 nil
-		       (sqlite-execute
-			elisa-db
-			(format
-			 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
-			 kind-id collection-id
-			 (elisa-sqlite-escape node-name) hash (elisa-sqlite-escape text)))
-		       (caar (sqlite-select
-			      elisa-db
-			      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-				      kind-id collection-id
-				      (elisa-sqlite-escape node-name) hash))))))
-	       (when rowid
-		 (sqlite-execute
-		  elisa-db
-		  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
-			  rowid (elisa-vector-to-sqlite embedding)))
-		 (sqlite-execute
-		  elisa-db
-		  (format "insert into data_fts(rowid, data) values (%s, '%s');"
-			  rowid (elisa-sqlite-escape text))))))
-	   chunks)
-	  (condition-case nil
-	      (funcall-interactively #'Info-forward-node)
-	    (error
-	     (setq continue nil))))))))
+				       collection-name)))
+			       (progn
+				 (sqlite-execute
+				  elisa-db
+				  (format
+				   "insert into collections (name) values ('%s');"
+				   collection-name))
+				 (caar (sqlite-select
+					elisa-db
+					(format
+					 "select rowid from collections where name = '%s';"
+					 collection-name))))))
+	    (kind-id (caar (sqlite-select
+			    elisa-db "select rowid from kinds where name = 'info';")))
+	    (continue t))
+	(while continue
+	  (let* ((node-name (concat "(" (file-name-sans-extension
+					 (file-name-nondirectory Info-current-file))
+				    ") "
+				    Info-current-node))
+		 (chunks (elisa-split-semantically)))
+	    (mapc
+	     (lambda (text)
+	       (let* ((hash (secure-hash 'sha256 text))
+		      (embedding (llm-embedding elisa-embeddings-provider text))
+		      (rowid
+		       (if-let ((rowid (caar (sqlite-select
+					      elisa-db
+					      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+						      kind-id collection-id
+						      (elisa-sqlite-escape node-name) hash)))))
+			   nil
+			 (sqlite-execute
+			  elisa-db
+			  (format
+			   "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+			   kind-id collection-id
+			   (elisa-sqlite-escape node-name) hash (elisa-sqlite-escape text)))
+			 (caar (sqlite-select
+				elisa-db
+				(format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+					kind-id collection-id
+					(elisa-sqlite-escape node-name) hash))))))
+		 (when rowid
+		   (sqlite-execute
+		    elisa-db
+		    (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+			    rowid (elisa-vector-to-sqlite embedding)))
+		   (sqlite-execute
+		    elisa-db
+		    (format "insert into data_fts(rowid, data) values (%s, '%s');"
+			    rowid (elisa-sqlite-escape text))))))
+	     chunks)
+	    (condition-case nil
+		(funcall-interactively #'Info-forward-node)
+	      (error
+	       (setq continue nil)))))))))
 
 (defun elisa--find-similar (text collections)
   "Find similar to TEXT results in COLLECTIONS.
@@ -1076,6 +1077,13 @@ WHERE d.rowid in %s;"
       (format elisa-chat-prompt-template prompt)
       nil :provider elisa-chat-provider))))
 
+(defun elisa--info-valid-p (name)
+  "Return NAME if info is valid."
+  (with-temp-buffer
+    (ignore-errors
+      (info name (current-buffer))
+      name)))
+
 (defun elisa-get-builtin-manuals ()
   "Get builtin manual names list."
   (mapcar
@@ -1089,21 +1097,25 @@ WHERE d.rowid in %s;"
 
 (defun elisa-get-external-manuals ()
   "Get external manual names list."
-  (seq-uniq
+  (cl-remove-if
+   #'not
    (mapcar
-    #'file-name-base
-    (process-lines
-     elisa-find-executable
-     (file-truename
-      (file-name-concat user-emacs-directory "elpa"))
-     "-name" "*.info"))))
+    #'elisa--info-valid-p
+    (seq-uniq
+     (mapcar
+      #'file-name-base
+      (process-lines
+       elisa-find-executable
+       (file-truename
+	(file-name-concat user-emacs-directory "elpa"))
+       "-name" "*.info"))))))
 
 ;;;###autoload
 (defun elisa-parse-builtin-manuals ()
   "Parse builtin manuals."
   (interactive)
   (mapc (lambda (s)
-	  (ignore-errors (elisa-parse-info-manual s "builtin manuals")))
+	  (elisa-parse-info-manual s "builtin manuals"))
 	(elisa-get-builtin-manuals)))
 
 ;;;###autoload
@@ -1111,7 +1123,7 @@ WHERE d.rowid in %s;"
   "Parse external manuals."
   (interactive)
   (mapc (lambda (s)
-	  (ignore-errors (elisa-parse-info-manual s "external manuals")))
+	  (elisa-parse-info-manual s "external manuals"))
 	(elisa-get-external-manuals)))
 
 ;;;###autoload
@@ -1148,6 +1160,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "ellama-long-lines-length")
 		    ,(async-inject-variables "elisa-reranker-enabled")
 		    ,(async-inject-variables "load-path")
+		    ,(async-inject-variables "Info-directory-list")
 		    (require 'elisa)
 		    (,func))
 		 (lambda (res)
