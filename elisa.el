@@ -6,7 +6,7 @@
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
 ;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
-;; Version: 0.2.0
+;; Version: 1.0.0
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
 
@@ -178,7 +178,7 @@ Increase it if you need decrease semantic split granularity."
   :group 'elisa
   :type 'float)
 
-(defcustom elisa-reranker-enabled t
+(defcustom elisa-reranker-enabled nil
   "Enable reranker to improve retrieving quality."
   :group 'elisa
   :type 'boolean)
