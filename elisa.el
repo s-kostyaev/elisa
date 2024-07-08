@@ -99,6 +99,16 @@
   :group 'elisa
   :type 'string)
 
+(defcustom elisa-sqlite-vss-path nil
+  "Path to sqlite-vss extension."
+  :group 'elisa
+  :type 'file)
+
+(defcustom elisa-sqlite-vector-path nil
+  "Path to sqlite-vector extension."
+  :group 'elisa
+  :type 'file)
+
 (defcustom elisa-semantic-split-function 'elisa-split-by-paragraph
   "Function for semantic text split."
   :group 'elisa
@@ -225,19 +235,21 @@ If set, all quotes with similarity less than threshold will be filtered out."
 
 (defun elisa--vss-path ()
   "Path to vss sqlite extension."
-  (let* ((ext (if (string-equal system-type "darwin")
-		  "dylib"
-		"so"))
-	 (file (format "vss0.%s" ext)))
-    (file-name-concat elisa-db-directory file)))
+  (or elisa-sqlite-vss-path
+      (let* ((ext (if (string-equal system-type "darwin")
+		      "dylib"
+		    "so"))
+	     (file (format "vss0.%s" ext)))
+	(file-name-concat elisa-db-directory file))))
 
 (defun elisa--vector-path ()
   "Path to vector sqlite extension."
-  (let* ((ext (if (string-equal system-type "darwin")
-		  "dylib"
-		"so"))
-	 (file (format "vector0.%s" ext)))
-    (file-name-concat elisa-db-directory file)))
+  (or elisa-sqlite-vector-path
+      (let* ((ext (if (string-equal system-type "darwin")
+		      "dylib"
+		    "so"))
+	     (file (format "vector0.%s" ext)))
+	(file-name-concat elisa-db-directory file))))
 
 ;;;###autoload
 (defun elisa-download-sqlite-vss ()
