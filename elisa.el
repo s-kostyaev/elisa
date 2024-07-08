@@ -414,49 +414,54 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 					 collection-name))))))
 	    (kind-id (caar (sqlite-select
 			    elisa-db "select rowid from kinds where name = 'info';")))
-	    (continue t))
+	    (continue t)
+	    (parsed-nodes nil))
 	(while continue
 	  (let* ((node-name (concat "(" (file-name-sans-extension
 					 (file-name-nondirectory Info-current-file))
 				    ") "
 				    Info-current-node))
 		 (chunks (elisa-split-semantically)))
-	    (mapc
-	     (lambda (text)
-	       (let* ((hash (secure-hash 'sha256 text))
-		      (embedding (llm-embedding elisa-embeddings-provider text))
-		      (rowid
-		       (if-let ((rowid (caar (sqlite-select
-					      elisa-db
-					      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-						      kind-id collection-id
-						      (elisa-sqlite-escape node-name) hash)))))
-			   nil
+	    (if (not (cl-find node-name parsed-nodes :test 'string-equal))
+		(progn
+		  (mapc
+		   (lambda (text)
+		     (let* ((hash (secure-hash 'sha256 text))
+			    (embedding (llm-embedding elisa-embeddings-provider text))
+			    (rowid
+			     (if-let ((rowid (caar (sqlite-select
+						    elisa-db
+						    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+							    kind-id collection-id
+							    (elisa-sqlite-escape node-name) hash)))))
+				 nil
+			       (sqlite-execute
+				elisa-db
+				(format
+				 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+				 kind-id collection-id
+				 (elisa-sqlite-escape node-name) hash (elisa-sqlite-escape text)))
+			       (caar (sqlite-select
+				      elisa-db
+				      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+					      kind-id collection-id
+					      (elisa-sqlite-escape node-name) hash))))))
+		       (when rowid
 			 (sqlite-execute
 			  elisa-db
-			  (format
-			   "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
-			   kind-id collection-id
-			   (elisa-sqlite-escape node-name) hash (elisa-sqlite-escape text)))
-			 (caar (sqlite-select
-				elisa-db
-				(format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-					kind-id collection-id
-					(elisa-sqlite-escape node-name) hash))))))
-		 (when rowid
-		   (sqlite-execute
-		    elisa-db
-		    (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
-			    rowid (elisa-vector-to-sqlite embedding)))
-		   (sqlite-execute
-		    elisa-db
-		    (format "insert into data_fts(rowid, data) values (%s, '%s');"
-			    rowid (elisa-sqlite-escape text))))))
-	     chunks)
-	    (condition-case nil
-		(funcall-interactively #'Info-forward-node)
-	      (error
-	       (setq continue nil)))))))))
+			  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+				  rowid (elisa-vector-to-sqlite embedding)))
+			 (sqlite-execute
+			  elisa-db
+			  (format "insert into data_fts(rowid, data) values (%s, '%s');"
+				  rowid (elisa-sqlite-escape text))))))
+		   chunks)
+		  (push node-name parsed-nodes)
+		  (condition-case nil
+		      (funcall-interactively #'Info-forward-node)
+		    (error
+		     (setq continue nil))))
+	      (setq continue nil))))))))
 
 (defun elisa--find-similar (text collections)
   "Find similar to TEXT results in COLLECTIONS.
