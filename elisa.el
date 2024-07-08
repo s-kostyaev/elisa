@@ -84,12 +84,12 @@
   :group 'elisa
   :type 'integer)
 
-(defcustom elisa-find-executable (executable-find "find")
+(defcustom elisa-find-executable "find"
   "Path to find executable."
   :group 'elisa
   :type 'string)
 
-(defcustom elisa-tar-executable (executable-find "tar")
+(defcustom elisa-tar-executable "tar"
   "Path to tar executable."
   :group 'elisa
   :type 'string)
@@ -263,7 +263,7 @@ If set, all quotes with similarity less than threshold will be filtered out."
 	(default-directory elisa-db-directory))
     (make-directory elisa-db-directory t)
     (url-copy-file (elisa-sqlite-vss-download-url) file-name t)
-    (process-lines elisa-tar-executable "-xf" file-name)
+    (process-lines (executable-find elisa-tar-executable) "-xf" file-name)
     (delete-file file-name))
   (elisa--reopen-db))
 
@@ -1122,7 +1122,7 @@ WHERE d.rowid in %s;"
      (mapcar
       #'file-name-base
       (process-lines
-       elisa-find-executable
+       (executable-find elisa-find-executable)
        (file-truename
 	(file-name-concat user-emacs-directory "elpa"))
        "-name" "*.info"))))))
