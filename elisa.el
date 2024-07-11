@@ -807,7 +807,6 @@ When FORCE parse even if already parsed."
 
 (defun elisa-parse-directory (dir)
   "Parse DIR as new collection syncronously."
-  (interactive "DSelect directory: ")
   (setq dir (expand-file-name dir))
   (let* ((collection-id (progn
 			  (sqlite-execute
@@ -1131,26 +1130,20 @@ WHERE d.rowid in %s;"
 	(file-name-concat user-emacs-directory "elpa"))
        "-name" "*.info"))))))
 
-;;;###autoload
 (defun elisa-parse-builtin-manuals ()
   "Parse builtin manuals."
-  (interactive)
   (mapc (lambda (s)
 	  (elisa-parse-info-manual s "builtin manuals"))
 	(elisa-get-builtin-manuals)))
 
-;;;###autoload
 (defun elisa-parse-external-manuals ()
   "Parse external manuals."
-  (interactive)
   (mapc (lambda (s)
 	  (elisa-parse-info-manual s "external manuals"))
 	(elisa-get-external-manuals)))
 
-;;;###autoload
 (defun elisa-parse-all-manuals ()
   "Parse all manuals."
-  (interactive)
   (elisa-parse-builtin-manuals)
   (elisa-parse-external-manuals))
 
