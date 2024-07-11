@@ -465,7 +465,7 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 
 (defun elisa--find-similar (text collections)
   "Find similar to TEXT results in COLLECTIONS.
-Return sqlite query. For asyncronous execution."
+Return sqlite query.  For asyncronous execution."
   (let* ((rowids (flatten-tree
 		  (sqlite-select
 		   elisa-db
