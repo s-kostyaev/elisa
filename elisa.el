@@ -973,6 +973,39 @@ You can customize `elisa-searxng-url' to use non local instance."
       elisa-reranker-limit
     elisa-limit))
 
+(defun elisa--parse-web-page (collection-id url)
+  "Parse URL into collection with COLLECTION-ID."
+  (let ((kind-id (caar (sqlite-select
+			elisa-db "select rowid from kinds where name = 'web';"))))
+    (message "collecting data from %s" url)
+    (mapc
+     (lambda (chunk)
+       (let* ((hash (secure-hash 'sha256 chunk))
+	      (embedding (llm-embedding elisa-embeddings-provider chunk))
+	      (rowid
+	       (if-let ((rowid (caar (sqlite-select
+				      elisa-db
+				      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash)))))
+		   nil
+		 (sqlite-execute
+		  elisa-db
+		  (format
+		   "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+		   kind-id collection-id url hash (elisa-sqlite-escape chunk)))
+		 (caar (sqlite-select
+			elisa-db
+			(format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash))))))
+	 (when rowid
+	   (sqlite-execute
+	    elisa-db
+	    (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+		    rowid (elisa-vector-to-sqlite embedding)))
+	   (sqlite-execute
+	    elisa-db
+	    (format "insert into data_fts(rowid, data) values (%s, '%s');"
+		    rowid (elisa-sqlite-escape chunk))))))
+     (elisa-extact-webpage-chunks url))))
+
 (defun elisa--web-search (prompt)
   "Search the web for PROMPT.
 Return sqlite query that extract data for adding to context."
@@ -981,9 +1014,7 @@ Return sqlite query that extract data for adding to context."
    (format
     "insert into collections (name) values ('%s') on conflict do nothing;"
     (elisa-sqlite-escape prompt)))
-  (let* ((kind-id (caar (sqlite-select
-			 elisa-db "select rowid from kinds where name = 'web';")))
-	 (collection-id (caar (sqlite-select
+  (let* ((collection-id (caar (sqlite-select
 			       elisa-db
 			       (format
 				"select rowid from collections where name = '%s';"
@@ -992,34 +1023,7 @@ Return sqlite query that extract data for adding to context."
 	 (collected-pages 0))
     (mapc (lambda (url)
 	    (when (<= collected-pages elisa-web-pages-limit)
-	      (message "collecting data from %s" url)
-	      (mapc
-	       (lambda (chunk)
-		 (let* ((hash (secure-hash 'sha256 chunk))
-			(embedding (llm-embedding elisa-embeddings-provider chunk))
-			(rowid
-			 (if-let ((rowid (caar (sqlite-select
-						elisa-db
-						(format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash)))))
-			     nil
-			   (sqlite-execute
-			    elisa-db
-			    (format
-			     "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
-			     kind-id collection-id url hash (elisa-sqlite-escape chunk)))
-			   (caar (sqlite-select
-				  elisa-db
-				  (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash))))))
-		   (when rowid
-		     (sqlite-execute
-		      elisa-db
-		      (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
-			      rowid (elisa-vector-to-sqlite embedding)))
-		     (sqlite-execute
-		      elisa-db
-		      (format "insert into data_fts(rowid, data) values (%s, '%s');"
-			      rowid (elisa-sqlite-escape chunk))))))
-	       (elisa-extact-webpage-chunks url))
+	      (elisa--parse-web-page collection-id url)
 	      (cl-incf collected-pages)))
 	  urls)))
 
@@ -1185,8 +1189,8 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		   (elisa--reopen-db)
 		   (when on-done
 		     (funcall on-done res))
-		   (message "%.40s done."
-			    (or command func))))))
+		   (message "%s done."
+			    (or command "async elisa processing"))))))
 
 (defun elisa-extact-webpage-chunks (url)
   "Extract semantic chunks for webpage fetched from URL."
@@ -1263,6 +1267,58 @@ It does nothing if buffer file not inside one of existing collections."
 		     elisa-db
 		     "select name from collections;")))))))
     (push col elisa-enabled-collections)))
+
+;;;###autoload
+(defun elisa-create-empty-collection (&optional collection)
+  "Create new empty COLLECTION."
+  (interactive "sNew collection name: ")
+  (save-window-excursion
+    (sqlite-execute
+     elisa-db
+     (format
+      "insert into collections (name) values ('%s') on conflict do nothing;"
+      (elisa-sqlite-escape collection)))))
+
+;;;###autoload
+(defun elisa-add-file-to-collection (file collection)
+  "Add FILE to COLLECTION."
+  (interactive
+   (list
+    (read-file-name "File: ")
+    (completing-read
+     "Enable collection: "
+     (flatten-tree
+      (sqlite-select
+       elisa-db
+       "select name from collections;")))))
+  (let ((collection-id (caar (sqlite-select
+			      elisa-db
+			      (format
+			       "select rowid from collections where name = '%s';"
+			       (elisa-sqlite-escape collection))))))
+    (elisa--async-do (lambda () (elisa-parse-file collection-id file)))))
+
+;;;###autoload
+(defun elisa-add-webpage-to-collection (url collection)
+  "Add webpage by URL to COLLECTION."
+  (interactive
+   (list
+    (if-let ((url (or (and (fboundp 'thing-at-point) (thing-at-point 'url))
+                      (shr-url-at-point nil))))
+        url
+      (read-string "Enter URL you want to summarize: "))
+    (completing-read
+     "Enable collection: "
+     (flatten-tree
+      (sqlite-select
+       elisa-db
+       "select name from collections;")))))
+  (let ((collection-id (caar (sqlite-select
+			      elisa-db
+			      (format
+			       "select rowid from collections where name = '%s';"
+			       (elisa-sqlite-escape collection))))))
+    (elisa--async-do (lambda () (elisa--parse-web-page collection-id url)))))
 
 ;;;###autoload
 (defun elisa-remove-collection (&optional collection)
