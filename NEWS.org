@@ -1,3 +1,11 @@
+* Version 1.0.0
+- Add semantic split.
+- Add optional reranker.
+- Add hybrid search.
+- Add collections.
+- Add web search.
+- Add search in local files.
+- Fix asyncronous parsing.
 * Version 0.1.4
 - Search for gzipped builtin manuals.
 * Version 0.1.3
