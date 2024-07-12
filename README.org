@@ -138,17 +138,28 @@ Removes collection and all its data from index.
 
 ** Configuration
 
-Example configuration. With default installation you don't need it.
+Example configuration.
 
 #+begin_src emacs-lisp
   (use-package elisa
     :init
     (setopt elisa-limit 5)
+    ;; reranker increases answer quality significantly
+    (setopt elisa-reranker-enabled t)
     (require 'llm-ollama)
-    (setopt elisa-embeddings-provider (make-llm-ollama :embedding-model "nomic-embed-text"))
-    (setopt elisa-chat-provider (make-llm-ollama
-				 :chat-model "sskostyaev/openchat:8k-rag"
-				 :embedding-model "nomic-embed-text")))
+    ;; gemma 2 works very good in my use cases
+    ;; it also boasts strong multilingual capabilities
+    (setopt elisa-chat-provider
+	    (make-llm-ollama
+	     :chat-model "gemma2:9b-instruct-q6_K"
+	     :embedding-model "chatfire/bge-m3:q8_0"
+	     ;; set context window to 8k
+	     :default-chat-non-standard-params '(("num_ctx" . 8192))))
+    ;; this embedding model has stong multilingual capabilities
+    (setopt elisa-embeddings-provider (make-llm-ollama :embedding-model "chatfire/bge-m3:q8_0"))
+    :config
+    ;; searxng works better than duckduckgo in my tests
+    (setopt elisa-web-search-function 'elisa-search-searxng))
 #+end_src
 
 ***  ELISA Custom Variables
