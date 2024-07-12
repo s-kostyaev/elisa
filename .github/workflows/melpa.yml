@@ -22,10 +22,12 @@ jobs:
       matrix:
         emacs_version:
           - 29.2
+          - 29.3
+          - 29.4
         ignore_warnings:
           - false
         warnings_as_errors:
-          - false
+          - true
         check:
           - melpa
         file:
