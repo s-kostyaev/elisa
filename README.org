@@ -44,9 +44,13 @@ This package now on [[https://melpa.org/#/getting-started][MELPA]] and you can j
 
 *** System dependencies
 
+**** Sqlite extensions
+
 Then you need to download ~sqlite-vss~. You can do it manually from
 https://github.com/asg017/sqlite-vss/releases or by calling ~M-x~
 ~elisa-download-sqlite-vss~.
+
+**** Large language models
 
 You can use this package with different llm providers. By default it
 uses [[https://github.com/jmorganca/ollama][ollama]] provider both for embeddings and chat. If you ok with it,
@@ -65,6 +69,28 @@ example:
 - [[sskostyaev/mistral:32k-rag][sskostyaev/mistral:32k-rag]] for chat
 - other [[https://ollama.com/library][models]] or [[https://github.com/ahyatt/llm?tab=readme-ov-file#setting-up-providers][providers]]
 - [[https://github.com/ollama/ollama?tab=readme-ov-file#create-a-model][create your own model]]
+
+I prefer this models:
+
+#+begin_src shell
+  ollama pull gemma2:9b-instruct-q6_K
+  ollama pull chatfire/bge-m3:q8_0
+#+end_src
+
+**** Reranker
+
+Reranker disabled by default to decrease number of system
+dependencies, but it improves quality of retrieving and answers
+significantly. You can find installation instructions [[https://github.com/s-kostyaev/reranker][here]].
+Recommended.
+
+**** Web search provider
+
+By defauld [[https://duckduckgo.com][duckduckgo]] used for web search. But I prefer [[https://github.com/searxng/searxng][searxng]]. The
+simplest way to use searxng is [[https://github.com/searxng/searxng-docker][docker]]. You need to enable json format
+in [[https://docs.searxng.org/admin/settings/settings_search.html#settings-search][settings]].
+
+**** Parse info manuals
 
 Create index for builtin, external or all info manuals by one of this
 commands:
