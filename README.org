@@ -63,10 +63,9 @@ This can take some time.
 
 *** elisa-chat
 
-Entrypoint. Makes similarity search in index, add semantically similar
-info nodes into context and query llm for prompt. Uses ~ellama~ under
-the hood. Call one of parse manuals functions to create index before
-use it.
+Entrypoint. Makes hybrid search in enabled collections, add founded
+quotes into context and query llm for prompt. Uses ~ellama~ under the
+hood.
 
 *** elisa-download-sqlite-vss
 
@@ -78,7 +77,7 @@ Parse builtin emacs info manuals asyncronously. Can take long time.
 
 *** elisa-async-parse-external-manuals
 
-Parse external emacs info manuals asyncronously.
+Parse external emacs info manuals asyncronously. Can take long time.
 
 *** elisa-async-parse-all-manuals
 
@@ -86,6 +85,56 @@ Parse all emacs info manuals asyncronously.
 
 One of parse functions should be called before ~elisa-chat~ to create
 index.
+
+*** elisa-web-search
+
+Search the web and answer to user query based on found information.
+
+**** How it works
+
+Search the web for user query. Create new collection with user query
+as name. Parse web pages to this new collection. Search in this
+collection. Add related information to context. Ask llm to answer user
+query based on provided context.
+
+*** elisa-async-parse-directory
+
+Parse directory as new collection. Can take long time. Works
+asyncronously and incrementally.
+
+*** elisa-reparse-current-collection
+
+Incrementally reparse current directory collection.
+It does nothing if buffer file not inside one of existing collections.
+Works asyncronously.
+
+*** elisa-create-empty-collection
+
+Create new empty collection.
+
+*** elisa-add-file-to-collection
+
+Add file to collection.
+
+*** elisa-add-webpage-to-collection
+
+Add webpage to collection.
+
+*** elisa-enable-collection
+
+Enable collection for ~elisa-chat~.
+
+*** elisa-disable-collection
+
+Disable collection.
+
+*** elisa-disble-all-collections
+
+Disable all collections.
+
+*** elisa-remove-collection
+
+Removes collection and all its data from index.
 
 ** Configuration
 
