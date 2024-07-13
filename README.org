@@ -222,136 +222,136 @@ Example configuration.
 
 **** General Settings
 
-+ *~elisa-embeddings-provider~*:
++ ~elisa-embeddings-provider~:
     * Description: LLM provider to generate embeddings for text.
     * Default: ~(make-llm-ollama :embedding-model "nomic-embed-text")~
 
-+ *~elisa-chat-provider~*:
++ ~elisa-chat-provider~:
     * Description: LLM provider used for chat interactions.
     * Default: ~(make-llm-ollama :chat-model "sskostyaev/openchat:8k-rag" :embedding-model
       "nomic-embed-text")~
 
-+ *~elisa-db-directory~*:
++ ~elisa-db-directory~:
     * Type: Directory
     * Description: Specifies the directory where ELISA stores its database.
     * Default: ~(file-name-concat user-emacs-directory "elisa")~ (within your Emacs config
       directory)
 
-+ *~elisa-limit~*:
++ ~elisa-limit~:
     * Type: Integer
     * Description: Controls the number of quotes passed to the LLM context for generating an
       answer.
     * Default: 5
 
-+ *~elisa-find-executable~*:
++ ~elisa-find-executable~:
     * Type: String
     * Description: Path to the ~find~ command executable. Used for locating files.
     * Default: ~"find"~
 
 **** File System and Database Management
 
-+ *~elisa-tar-executable~*:
++ ~elisa-tar-executable~:
     * Type: String
     * Description: Path to the ~tar~ command executable. Used for archiving files.
     * Default: ~"tar"~
 
-+ *~elisa-sqlite-vss-version~*:
++ ~elisa-sqlite-vss-version~:
     * Type: String
     * Description: Version of the SQLite VSS extension.
 
-+ *~elisa-sqlite-vss-path~*:
++ ~elisa-sqlite-vss-path~:
     * Type: File path
     * Description: Path to the SQLite VSS extension file.
 
-+ *~elisa-sqlite-vector-path~*:
++ ~elisa-sqlite-vector-path~:
     * Type: File path
     * Description: Path to the SQLite Vector extension file.
 
 **** Text Processing and Semantic Splitting
 
-+ *~elisa-semantic-split-function~*:
++ ~elisa-semantic-split-function~:
     * Type: Function
     * Description:  Function used to split text into semantically meaningful chunks.
     * Default: ~elisa-split-by-paragraph~
 
-+ *~elisa-prompt-rewriting-enabled~*:
++ ~elisa-prompt-rewriting-enabled~:
     * Type: Boolean
     * Description: Enables or disables prompt rewriting for better retrieving.
     * Default: ~t~ (enabled)
 
-+ *~elisa-chat-prompt-template~*:
++ ~elisa-chat-prompt-template~:
     * Type: String
     * Description: Template used for constructing the chat prompt.
 
-+ *~elisa-rewrite-prompt-template~*:
++ ~elisa-rewrite-prompt-template~:
     * Type: String
     * Description: Template used for rewriting prompts for better retrieval.
 
 **** Web Search and Integration
 
-+ *~elisa-searxng-url~*:
++ ~elisa-searxng-url~:
     * Type: String
     * Description: URL of your SearXNG instance.
     * Default: ~"http://localhost:8080/"~
 
-+ *~elisa-pandoc-executable~*:
++ ~elisa-pandoc-executable~:
     * Type: String
     * Description: Path to the ~pandoc~ command executable. Used for converting documents to text.
     * Default: ~"pandoc"~
 
-+ *~elisa-webpage-extraction-function~*:
++ ~elisa-webpage-extraction-function~:
     * Type: Function
     * Description: Function used to extract the content from a webpage.
     * Default: ~elisa-get-webpage-buffer~
 
-+ *~elisa-web-search-function~*:
++ ~elisa-web-search-function~:
     * Type: Function
     * Description: Function responsible for performing web searches using the provided prompt.
     * Default: ~elisa-search-duckduckgo~
 
-+ *~elisa-web-pages-limit~*:
++ ~elisa-web-pages-limit~:
     * Type: Integer
     * Description: Maximum number of web pages to parse during a search.
     * Default: 10
 
 **** Reranking
 
-+ *~elisa-breakpoint-threshold-amount~*:
++ ~elisa-breakpoint-threshold-amount~:
     * Type: Float
     * Description: Threshold used for controlling the granularity of semantic splitting.
     * Default: 0.4
 
-+ *~elisa-reranker-enabled~*:
++ ~elisa-reranker-enabled~:
     * Type: Boolean
     * Description: Enables or disables reranking, which can improve retrieval quality by ranking
       retrieved quotes based on relevance.
     * Default: ~nil~ (not set)
 
-+ *~elisa-reranker-url~*:
++ ~elisa-reranker-url~:
     * Type: String
     * Description: URL of the reranking service.
     * Default: ~"http://127.0.0.1:8787/"~
 
-+ *~elisa-reranker-similarity-threshold~*:
++ ~elisa-reranker-similarity-threshold~:
     * Type: Float
     * Description: Similarity threshold for reranking. Quotes below this threshold will be filtered
       out. If not set all ~ellama-limit~ quotes will be added to context.
     * Default: 0
 
-+ *~elisa-reranker-limit~*:
++ ~elisa-reranker-limit~:
     * Type: Integer
     * Description: Number of quotes to send to the reranker.
     * Default: 20
 
 **** File Parsing and Exclusion
 
-+ *~elisa-ignore-patterns-files~*:
++ ~elisa-ignore-patterns-files~:
     * Type: List of strings
     * Description: List of file name patterns (e.g., ~.gitignore~) used to ignore files during
       parsing.
     * Default: ~(".gitignore" ".ignore" ".rgignore")~
 
-+ *~elisa-ignore-invisible-files~*:
++ ~elisa-ignore-invisible-files~:
     * Type: Boolean
     * Description: Toggles whether invisible files and directories should be ignored during
       parsing.
@@ -359,7 +359,7 @@ Example configuration.
 
 **** ELISA Chat Collections
 
-+ *~elisa-enabled-collections~*:
++ ~elisa-enabled-collections~:
     * Type: List of strings
     * Description: Specifies which collections are enabled for chat interactions.
     * Default: ~("builtin manuals" "external manuals")~
