@@ -246,14 +246,14 @@ Example configuration.
 + ~elisa-find-executable~:
     * Type: String
     * Description: Path to the ~find~ command executable. Used for locating files.
-    * Default: ~"find"~
+    * Default: "find"
 
 **** File System and Database Management
 
 + ~elisa-tar-executable~:
     * Type: String
     * Description: Path to the ~tar~ command executable. Used for archiving files.
-    * Default: ~"tar"~
+    * Default: "tar"
 
 + ~elisa-sqlite-vss-version~:
     * Type: String
@@ -292,12 +292,12 @@ Example configuration.
 + ~elisa-searxng-url~:
     * Type: String
     * Description: URL of your SearXNG instance.
-    * Default: ~"http://localhost:8080/"~
+    * Default: "http://localhost:8080/"
 
 + ~elisa-pandoc-executable~:
     * Type: String
     * Description: Path to the ~pandoc~ command executable. Used for converting documents to text.
-    * Default: ~"pandoc"~
+    * Default: "pandoc"
 
 + ~elisa-webpage-extraction-function~:
     * Type: Function
@@ -330,7 +330,7 @@ Example configuration.
 + ~elisa-reranker-url~:
     * Type: String
     * Description: URL of the reranking service.
-    * Default: ~"http://127.0.0.1:8787/"~
+    * Default: "http://127.0.0.1:8787/"
 
 + ~elisa-reranker-similarity-threshold~:
     * Type: Float
