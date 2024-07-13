@@ -2,6 +2,7 @@
 
 [[http://www.gnu.org/licenses/gpl-3.0.txt][file:https://img.shields.io/badge/license-GPL_3-green.svg]]
 [[https://melpa.org/#/elisa][file:https://melpa.org/packages/elisa-badge.svg]]
+[[https://stable.melpa.org/#/elisa][file:https://stable.melpa.org/packages/elisa-badge.svg]]
 
 ELISA (Emacs Lisp Information System Assistant) is a system designed
 to provide informative answers to user queries by leveraging a
