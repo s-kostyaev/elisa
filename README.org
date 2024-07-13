@@ -35,6 +35,18 @@ involves:
    identified contextual quotes, aiming to provide a comprehensive and
    accurate answer to the user's question.
 
+*** Collections
+
+ELISA operates on collections. Collection has name and contains quotes
+from parsed documents. Every web search, every directory parsing
+creates new collection. ELISA searches in enabled collection, adds
+relevant information to context and let LLM answer user query.
+
+*** PDF files support
+
+Currently PDF files parsing not supported. You can use [[https://github.com/VikParuchuri/marker][marker]] to
+convert it and then create collection from result markdown files.
+
 ** Installation
 
 You need emacs 29.2 or newer to use this package.
@@ -187,6 +199,9 @@ Example configuration.
     (setopt elisa-limit 5)
     ;; reranker increases answer quality significantly
     (setopt elisa-reranker-enabled t)
+    ;; prompt rewriting may increase quality of answers
+    ;; disable it if you want direct control over prompt
+    (setopt elisa-prompt-rewriting-enabled t)
     (require 'llm-ollama)
     ;; gemma 2 works very good in my use cases
     ;; it also boasts strong multilingual capabilities
