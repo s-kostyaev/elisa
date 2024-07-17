@@ -25,14 +25,82 @@
 
 ;;; Commentary:
 ;;
-;; ELISA (Emacs Lisp Information System Assistant) is a system designed
-;; to provide informative answers to user queries by leveraging a
-;; Retrieval Augmented Generation (RAG) approach.
+;; ELISA (Emacs Lisp Information System Assistant) is a system
+;; designed to generate informative answers to user queries using a
+;; Retrieval Augmented Generation (RAG) approach.  RAG combines the
+;; capabilities of Large Language Models (LLMs) with Information
+;; Retrieval (IR) techniques to enhance the accuracy and relevance of
+;; generated responses.
 ;;
+;; ELISA addresses limitations inherent in purely LLM-based systems by:
+;;
+;; - Leveraging External Knowledge: Unlike LLMs trained on a fixed
+;; dataset, ELISA can access and process information from external
+;; knowledge sources, expanding its knowledge base beyond its initial
+;; training data.
+;;
+;; - Reducing Computational Requirements: Instead of
+;; retraining the entire LLM for new information, ELISA focuses on
+;; retrieving relevant data, minimizing computational resources
+;; required for query processing.
+;;
+;; - Minimizing Hallucinations: By grounding responses in factual
+;; data retrieved from external sources, ELISA aims to reduce the
+;; likelihood of generating incorrect or nonsensical information
+;; (hallucinations) often associated with LLMs.
+;;
+;; The following sections will detail the key components and processes
+;; involved in ELISA's operation: parsing, retrieval, augmentation,
+;; and generation.
+;;
+;; Parsing.
+;;
+;; Simple solution is split text document into chunks by length with
+;; overlap and save it to storage.  In ELISA we use more advanced
+;; solution.  Instead of split by length we split text by semantic
+;; distances between parts of text document.  To store this chunks we
+;; use sqlite database.
+;;
+;; Retrieving.
+;;
+;; Simple solution is to extract top K chunks by semantic similarity
+;; from storage.  To improve quality we use more robust solution.
+;;
+;; Before going to storage we let LLM rewrite user query to make it
+;; context agnostic.  For example, user ask LLM about llamas, LLM
+;; answer.  Then user ask "where it lives?".  If we try to search for
+;; this query we barely find something useful.  But LLM can rewrite it
+;; to something like "where llamas lives?" and we will find useful
+;; information.
+;;
+;; Instead of use simple semantic similarity search only we use hybrid
+;; search.  It means that ELISA search relevant chunks by semantic
+;; similarity and by full text search and then combine results.
+;;
+;; To improve relevance even more instead of use top K results from
+;; hybrid search user can enable reranker.  Reranker is a service that
+;; gives user query, top N chunks and feed it to reranker model.  This
+;; model gives pairs of text: user query and text chunk and return
+;; number that means relevance.  Service collect this results and sort
+;; it by relevance.  Also if reranker enabled ELISA filter out
+;; irrelevant results.
+;;
+;; Augmentation.
+;;
+;; ELISA gets text retrieved in previous step and put it into context.
+;; This context later will be sent to LLM together with user query.
+;;
+;; Generation.
+;;
+;; To improve generation quality to user query will be added
+;; instructions to LLM how to answer.  We let LLM ability to say "not
+;; enough data" instead of hallucinations.  LLM generates answer based
+;; on context, instructions and user query.
 
 ;;; Code:
 (require 'ellama)
 (require 'llm)
+(require 'llm-provider-utils)
 (require 'info)
 (require 'async)
 (require 'dom)
@@ -48,68 +116,65 @@
 					    (make-llm-ollama
 					     :embedding-model "nomic-embed-text"))
   "Embeddings provider to generate embeddings."
-  :group 'elisa
-  :type '(sexp :validate 'cl-struct-p))
+  :type '(sexp :validate 'llm-standard-provider-p))
 
 (defcustom elisa-chat-provider (progn (require 'llm-ollama)
 				      (make-llm-ollama
 				       :chat-model "sskostyaev/openchat:8k-rag"
 				       :embedding-model "nomic-embed-text"))
   "Chat provider."
-  :group 'elisa
-  :type '(sexp :validate 'cl-struct-p))
+  :type '(sexp :validate 'llm-standard-provider-p))
 
 (defcustom elisa-db-directory (file-truename
 			       (file-name-concat
 				user-emacs-directory "elisa"))
   "Directory for elisa database."
-  :group 'elisa
   :type 'directory)
 
 (defcustom elisa-limit 5
   "Count quotes to pass into llm context for answer."
-  :group 'elisa
-  :type 'integer)
+  :type 'natnum)
 
-(defcustom elisa-find-executable "find"
+(defcustom elisa-find-executable find-program
   "Path to find executable."
-  :group 'elisa
   :type 'string)
 
 (defcustom elisa-tar-executable "tar"
   "Path to tar executable."
-  :group 'elisa
   :type 'string)
 
 (defcustom elisa-sqlite-vss-version "v0.1.2"
   "Sqlite VSS version."
-  :group 'elisa
   :type 'string)
 
 (defcustom elisa-sqlite-vss-path nil
   "Path to sqlite-vss extension."
-  :group 'elisa
   :type 'file)
 
 (defcustom elisa-sqlite-vector-path nil
   "Path to sqlite-vector extension."
-  :group 'elisa
   :type 'file)
 
-(defcustom elisa-semantic-split-function 'elisa-split-by-paragraph
+(defcustom elisa-semantic-split-function #'elisa-split-by-paragraph
   "Function for semantic text split."
-  :group 'elisa
   :type 'function)
 
 (defcustom elisa-prompt-rewriting-enabled t
   "Enable prompt rewriting for better retrieving."
-  :group 'elisa
   :type 'boolean)
 
-(defcustom elisa-chat-prompt-template "Answer user query based on context above. If you can answer it partially do it. Provide list of open questions if any. Say \"not enough data\" if you can't answer user query based on provided context. User query:
+(defcustom elisa-chat-prompt-template
+  "Answer user query based on context above. \
+If you can answer it partially do it. \
+Provide list of open questions if any. \
+Say \"not enough data\" if you can't answer user \
+query based on provided context. User query:
 %s"
-  "Chat prompt template."
-  :group 'elisa
+  "Chat prompt template.
+Contains instructions to LLM to be more focused on data in
+context, be able to say \"I don't know\" etc. User query will be
+inserted at the end and all this result prompt will be sent to
+LLM together with context."
   :type 'string)
 
 (defcustom elisa-rewrite-prompt-template
@@ -130,81 +195,79 @@ How to buy a pony?
  User prompt:
 %s"
   "Prompt template for prompt rewriting."
-  :group 'elisa
   :type 'string)
 
 (defcustom elisa-searxng-url "http://localhost:8080/"
   "Searxng url for web search.  Json format should be enabled for this instance."
-  :group 'elisa
   :type 'string)
 
 (defcustom elisa-pandoc-executable "pandoc"
-  "Path to pandoc executable."
-  :group 'elisa
+  "Path to pandoc (https://pandoc.org/) executable."
   :type 'string)
 
-(defcustom elisa-webpage-extraction-function 'elisa-get-webpage-buffer
+(defcustom elisa-webpage-extraction-function #'elisa-get-webpage-buffer
   "Function to get buffer with webpage content."
-  :group 'elisa
   :type 'function)
 
-(defcustom elisa-web-search-function 'elisa-search-duckduckgo
+(defcustom elisa-web-search-function #'elisa-search-duckduckgo
   "Function to search the web.
 Function should get prompt and return list of urls."
-  :group 'elisa
   :type 'function)
 
 (defcustom elisa-web-pages-limit 10
   "Limit of web pages to parse during web search."
-  :group 'elisa
-  :type 'integer)
+  :type 'natnum)
 
 (defcustom elisa-breakpoint-threshold-amount 0.4
   "Breakpoint threshold amount.
 Increase it if you need decrease semantic split granularity."
-  :group 'elisa
-  :type 'float)
+  :type 'number)
 
 (defcustom elisa-reranker-enabled nil
-  "Enable reranker to improve retrieving quality."
-  :group 'elisa
+  "Enable reranker to improve retrieving quality.
+Reranker is a service to improve answer quality by mesure
+relevance of text chunks to user query and sort chunks by
+relevance.  See https://github.com/s-kostyaev/reranker for more
+details."
   :type 'boolean)
 
 (defcustom elisa-reranker-url "http://127.0.0.1:8787/"
-  "Reranker service url."
-  :group 'elisa
+  "Reranker service url.
+Reranker is a service to improve answer quality by mesure
+relevance of text chunks to user query and sort chunks by
+relevance.  See https://github.com/s-kostyaev/reranker for more
+details."
   :type 'string)
 
 (defcustom elisa-reranker-similarity-threshold 0
   "Reranker similarity threshold.
 If set, all quotes with similarity less than threshold will be filtered out."
-  :group 'elisa
-  :type 'string)
+  :type 'number)
 
 (defcustom elisa-reranker-limit 20
   "Number of quotes for send to reranker."
-  :group 'elisa
   :type 'integer)
 
 (defcustom elisa-ignore-patterns-files '(".gitignore" ".ignore" ".rgignore")
   "Files with patterns to ignore during file parsing."
-  :group 'elisa
-  :type '(list string))
+  :type '(repeat string))
 
 (defcustom elisa-ignore-invisible-files t
   "Ignore invisible files and directories during file parsing."
-  :group 'elisa
   :type 'boolean)
 
 (defcustom elisa-enabled-collections '("builtin manuals" "external manuals")
   "Enabled collections for elisa chat."
-  :group 'elisa
-  :type '(list string))
+  :type '(repeat string))
 
 (defun elisa-sqlite-vss-download-url ()
-  "Generate sqlite vss download url based on current system."
-  (cond  ((string-equal system-type "darwin")
-	  (if (string-prefix-p "aarch64" system-configuration)
+  "Generate sqlite vss download url based on current system.
+Sqlite vss is an extension to sqlite providing vector search
+similarity support that used to retrieve relevant data from
+database."
+  (cond  ((eq system-type 'darwin)
+	  (if (or (string-prefix-p "aarch64" system-configuration)
+		  (string-prefix-p "arm" system-configuration))
 	      (format
 	       "https://github.com/asg017/sqlite-vss/releases/download/%s/sqlite-vss-%s-loadable-macos-aarch64.tar.gz"
 	       elisa-sqlite-vss-version
@@ -213,7 +276,7 @@ If set, all quotes with similarity less than threshold will be filtered out."
 	     "https://github.com/asg017/sqlite-vss/releases/download/%s/sqlite-vss-%s-loadable-macos-x86_64.tar.gz"
 	     elisa-sqlite-vss-version
 	     elisa-sqlite-vss-version)))
-	 ((string-equal system-type "gnu/linux")
+	 ((eq system-type 'gnu/linux)
 	  (format
 	   "https://github.com/asg017/sqlite-vss/releases/download/%s/sqlite-vss-%s-loadable-linux-x86_64.tar.gz"
 	   elisa-sqlite-vss-version
@@ -223,18 +286,14 @@ If set, all quotes with similarity less than threshold will be filtered out."
 (defun elisa--vss-path ()
   "Path to vss sqlite extension."
   (or elisa-sqlite-vss-path
-      (let* ((ext (if (string-equal system-type "darwin")
-		      "dylib"
-		    "so"))
+      (let* ((ext (if (eq system-type 'darwin) "dylib" "so"))
 	     (file (format "vss0.%s" ext)))
 	(file-name-concat elisa-db-directory file))))
 
 (defun elisa--vector-path ()
   "Path to vector sqlite extension."
   (or elisa-sqlite-vector-path
-      (let* ((ext (if (string-equal system-type "darwin")
-		      "dylib"
-		    "so"))
+      (let* ((ext (if (string-equal system-type 'darwin) "dylib" "so"))
 	     (file (format "vector0.%s" ext)))
 	(file-name-concat elisa-db-directory file))))
 
@@ -260,45 +319,45 @@ If set, all quotes with similarity less than threshold will be filtered out."
 
 (defun elisa-embeddings-create-table-sql ()
   "Generate sql for create embeddings table."
-  "drop table if exists elisa_embeddings;")
+  "DROP TABLE IF EXISTS elisa_embeddings;")
 
 (defun elisa-data-embeddings-create-table-sql ()
   "Generate sql for create data embeddings table."
-  (format "create virtual table if not exists data_embeddings using vss0(embedding(%d));"
+  (format "CREATE VIRTUAL TABLE IF NOT EXISTS data_embeddings USING vss0(embedding(%d));"
 	  (elisa-get-embedding-size)))
 
 (defun elisa-data-fts-create-table-sql ()
   "Generate sql for create full text search table."
-  "create virtual table if not exists data_fts using fts5(data);")
+  "CREATE VIRTUAL TABLE IF NOT EXISTS data_fts USING FTS5(data);")
 
 (defun elisa-info-create-table-sql ()
   "Generate sql for create info table."
-  "drop table if exists info;")
+  "DROP TABLE IF EXISTS info;")
 
 (defun elisa-collections-create-table-sql ()
   "Generate sql for create collections table."
-  "create table if not exists collections (name text unique);")
+  "CREATE TABLE IF NOT EXISTS collections (name TEXT UNIQUE);")
 
 (defun elisa-kinds-create-table-sql ()
   "Generate sql for create kinds table."
-  "create table if not exists kinds (name text unique);")
+  "CREATE TABLE IF NOT EXISTS kinds (name TEXT UNIQUE);")
 
 (defun elisa-fill-kinds-sql ()
   "Generate sql for fill kinds table."
-  "insert into kinds (name) values ('web'), ('file'), ('info') on conflict do nothing;")
+  "INSERT INTO KINDS (name) VALUES ('web'), ('file'), ('info') ON CONFLICT DO NOTHING;")
 
 (defun elisa-files-create-table-sql ()
   "Generate sql for create files table."
-  "create table if not exists files (path text unique, hash text)")
+  "CREATE TABLE IF NOT EXISTS files (path TEXT UNIQUE, hash TEXT)")
 
 (defun elisa-data-create-table-sql ()
   "Generate sql for create data table."
-  "create table if not exists data (
+  "CREATE TABLE IF NOT EXISTS data (
 kind_id INTEGER,
 collection_id INTEGER,
-path text,
-hash text,
-data text,
+path TEXT,
+hash TEXT,
+data TEXT,
 FOREIGN KEY(kind_id) REFERENCES kinds(rowid),
 FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 );")
@@ -308,12 +367,8 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   (if (not (file-exists-p (elisa--vss-path)))
       (warn "Please run M-x `elisa-download-sqlite-vss' to use this package")
     (sqlite-pragma db "PRAGMA journal_mode=WAL;")
-    (sqlite-load-extension
-     db
-     (elisa--vector-path))
-    (sqlite-load-extension
-     db
-     (elisa--vss-path))
+    (sqlite-load-extension db (elisa--vector-path))
+    (sqlite-load-extension db (elisa--vss-path))
     (sqlite-execute db (elisa-embeddings-create-table-sql))
     (sqlite-execute db (elisa-info-create-table-sql))
     (sqlite-execute db (elisa-collections-create-table-sql))
@@ -324,44 +379,46 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
     (sqlite-execute db (elisa-data-embeddings-create-table-sql))
     (sqlite-execute db (elisa-data-fts-create-table-sql))))
 
-(defvar elisa-db (progn
-		   (make-directory elisa-db-directory t)
-		   (let ((db (sqlite-open (file-name-concat elisa-db-directory "elisa.sqlite"))))
-		     (elisa--init-db db)
-		     db)))
+(defvar elisa-db
+  (let ((_ (make-directory elisa-db-directory t))
+        (db (sqlite-open (file-name-concat elisa-db-directory "elisa.sqlite"))))
+    (elisa--init-db db)
+    db))
 
 (defun elisa-vector-to-sqlite (data)
   "Convert DATA to sqlite vector representation."
-  (format "vector_from_json(json('%s'))"
-	  (json-encode data)))
+  (format "vector_from_json(json('%s'))" (json-encode data)))
 
-(defun elisa-sqlite-escape (s)
-  "Escape single quotes in S for sqlite."
-  (thread-last
-    s
-    (string-replace "'" "''")
-    (string-replace "\\" "\\\\")
-    (string-replace "\0" "\n")))
+(defun elisa-sqlite-escape (string)
+  "Escape single quotes in STRING for sqlite."
+  (let ((reps '(("'" . "''")
+                ("\\" . "\\\\")
+                ("\0" . "\n"))))
+    (replace-regexp-in-string
+     (regexp-opt (mapcar #'car reps))
+     (lambda (str) (alist-get str reps nil nil #'string=))
+     string nil t)))
 
 (defun elisa-sqlite-format-int-list (ids)
   "Convert list of integer IDS list to sqlite list representation."
   (format
    "(%s)"
-   (string-join (mapcar (lambda (id) (format "%d" id)) ids) ", ")))
+   (mapconcat (lambda (id) (format "%d" id)) ids ", ")))
 
 (defun elisa-sqlite-format-string-list (names)
   "Convert list of string NAMES list to sqlite list representation."
   (format
    "(%s)"
-   (string-join (mapcar (lambda (name)
-			  (format "'%s'"
-				  (elisa-sqlite-escape name))) names) ", ")))
+   (mapconcat (lambda (name)
+		(format "'%s'"
+			(elisa-sqlite-escape name)))
+              names ", ")))
 
-(defun elisa-avg (lst)
-  "Calculate arithmetic average value of LST."
-  (let ((len (length lst))
-	(sum (cl-reduce #'+ lst :initial-value 0.0)))
-    (/ sum len)))
+(defun elisa-avg (list)
+  "Calculate arithmetic average value of LIST."
+  (cl-loop for elem in list for count from 0
+           summing elem into sum
+           finally (return (/ sum (float count)))))
 
 (defun elisa-std-dev (lst)
   "Calculate standart deviation value of LST."
@@ -520,7 +577,7 @@ Evaluate ON-DONE with result."
 	(result nil))
     (save-excursion
       (goto-char (point-min))
-      (while (< (point) (point-max))
+      (while (not (eobp))
 	(funcall func)
 	(push (buffer-substring-no-properties pt (point)) result)
 	(setq pt (point)))
@@ -608,14 +665,12 @@ than T, it will be packed into single semantic chunk."
 	    (current (car chunks))
 	    (tail (cdr chunks)))
       (let* ((result nil))
-	(mapc
-	 (lambda (el)
-	   (if (<= el threshold)
-	       (setq current (concat current (car tail)))
-	     (push current result)
-	     (setq current (car tail)))
-	   (setq tail (cdr tail)))
-	 distances)
+        (dolist (el distances)
+          (if (<= el threshold)
+	      (setq current (concat current (car tail)))
+	    (push current result)
+	    (setq current (car tail)))
+	  (setq tail (cdr tail)))
 	(push current result)
 	(cl-remove-if
 	 #'string-empty-p
@@ -626,45 +681,9 @@ than T, it will be packed into single semantic chunk."
 		 (nreverse result))))
     (list (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun elisa--gitignore-to-elisp-regexp (pattern)
-  "Convert a .gitignore PATTERN to an Emacs Lisp regexp."
-  (let ((result "")
-        (i 0)
-        (len (length pattern)))
-    (while (< i len)
-      (let ((char (aref pattern i)))
-        (cond
-         ;; Escape special regex characters
-         ((string-match-p "[.?+*^$(){}\\[\\]\\\\]" (char-to-string char))
-          (setq result (concat result "\\" (char-to-string char))))
-         ;; Handle ** for any number of directories
-         ((and (> len (+ i 1))
-               (char-equal char ?*)
-               (char-equal (aref pattern (+ i 1)) ?*))
-          (setq result (concat result ".*"))
-          (setq i (+ i 1)))
-         ;; Handle * for any number of characters except /
-         ((char-equal char ?*)
-          (setq result (concat result "[^/]*")))
-         ;; Handle ? for a single character except /
-         ((char-equal char ??)
-          (setq result (concat result "[^/]")))
-         ;; Handle negation
-         ((char-equal char ?!)
-          (setq result (concat result "^")))
-         ;; Handle directory separator
-         ((char-equal char ?/)
-          (setq result (concat result "/")))
-         ;; Default case: add the character as is
-         (t
-          (setq result (concat result (char-to-string char))))))
-      (setq i (+ i 1)))
-    ;; prevent false-positive partial matches
-    (concat result "$")))
-
 (defun elisa--read-ignore-file-regexps (directory)
   "Read ignore patterns from `elisa-ignore-patterns-files' in DIRECTORY."
-  (mapcar #'elisa--gitignore-to-elisp-regexp
+  (mapcar #'wildcard-to-regexp
 	  (flatten-tree
 	   (mapcar (lambda (file)
 		     (let ((filepath (expand-file-name file directory)))
@@ -676,11 +695,11 @@ than T, it will be packed into single semantic chunk."
 
 (defun elisa--text-file-p (filename)
   "Check if FILENAME contain text."
-  (or (when (get-file-buffer filename) t) ;; if file opened assume it text
+  (or (and (get-file-buffer filename) t) ;; if file opened assume it text
       (with-current-buffer (find-file-noselect filename t t)
 	(prog1
 	    ;; if there is null byte in file, file is binary
-	    (not (re-search-forward "\0" nil t 1))
+	    (not (search-forward "\0" nil t 1))
 	  (kill-buffer)))))
 
 (defun elisa--file-list (directory)
@@ -727,41 +746,39 @@ When FORCE parse even if already parsed."
 	     (format "delete from files where path = '%s';"
 		     (elisa-sqlite-escape path))))
 	  ;; add new data
-	  (mapc
-	   (lambda (text)
-	     (let* ((hash (secure-hash 'sha256 text))
-		    (rowid
-		     (if-let ((rowid (caar (sqlite-select
-					    elisa-db
-					    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-						    kind-id collection-id
-						    (elisa-sqlite-escape path) hash)))))
-			 (progn
-			   (push rowid row-ids)
-			   nil)
-		       (sqlite-execute
-			elisa-db
-			(format
-			 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
-			 kind-id collection-id
-			 (elisa-sqlite-escape path) hash (elisa-sqlite-escape text)))
-		       (caar (sqlite-select
-			      elisa-db
-			      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
-				      kind-id collection-id
-				      (elisa-sqlite-escape path) hash))))))
-	       (when rowid
-		 (sqlite-execute
-		  elisa-db
-		  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
-			  rowid (elisa-vector-to-sqlite
-				 (llm-embedding elisa-embeddings-provider text))))
-		 (sqlite-execute
-		  elisa-db
-		  (format "insert into data_fts(rowid, data) values (%s, '%s');"
-			  rowid (elisa-sqlite-escape text)))
-		 (push rowid row-ids))))
-	   chunks)
+          (dolist (text chunks)
+            (let* ((hash (secure-hash 'sha256 text))
+		   (rowid
+		    (if-let ((rowid (caar (sqlite-select
+					   elisa-db
+					   (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+						   kind-id collection-id
+						   (elisa-sqlite-escape path) hash)))))
+			(progn
+			  (push rowid row-ids)
+			  nil)
+		      (sqlite-execute
+		       elisa-db
+		       (format
+			"insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+			kind-id collection-id
+			(elisa-sqlite-escape path) hash (elisa-sqlite-escape text)))
+		      (caar (sqlite-select
+			     elisa-db
+			     (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+				     kind-id collection-id
+				     (elisa-sqlite-escape path) hash))))))
+	      (when rowid
+		(sqlite-execute
+		 elisa-db
+		 (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+			 rowid (elisa-vector-to-sqlite
+				(llm-embedding elisa-embeddings-provider text))))
+		(sqlite-execute
+		 elisa-db
+		 (format "insert into data_fts(rowid, data) values (%s, '%s');"
+			 rowid (elisa-sqlite-escape text)))
+		(push rowid row-ids))))
 	  ;; remove old data
 	  (when row-ids
 	    (let ((delete-rows (cl-remove-if (lambda (id)
@@ -777,20 +794,19 @@ When FORCE parse even if already parsed."
     (when (not opened)
       (kill-buffer buf))))
 
+(defun elisa--delete-from-table (table ids)
+  "Delete IDS from TABLE."
+  (sqlite-execute
+   elisa-db
+   (format "delete from %s where rowid in %s;"
+	   table
+	   (elisa-sqlite-format-int-list ids))))
+
 (defun elisa--delete-data (ids)
   "Delete data with IDS."
-  (sqlite-execute
-   elisa-db
-   (format "delete from data_fts where rowid in %s;"
-	   (elisa-sqlite-format-int-list ids)))
-  (sqlite-execute
-   elisa-db
-   (format "delete from data_embeddings where rowid in %s;"
-	   (elisa-sqlite-format-int-list ids)))
-  (sqlite-execute
-   elisa-db
-   (format "delete from data where rowid in %s;"
-	   (elisa-sqlite-format-int-list ids))))
+  (elisa--delete-from-table "data_fts" ids)
+  (elisa--delete-from-table "data_embeddings" ids)
+  (elisa--delete-from-table "data" ids))
 
 (defun elisa-parse-directory (dir)
   "Parse DIR as new collection syncronously."
@@ -815,10 +831,9 @@ When FORCE parse even if already parsed."
 			collection-id
 			(elisa-sqlite-format-string-list files))))))
     (elisa--delete-data delete-ids)
-    (mapc (lambda (file)
-	    (message "parsing %s" file)
-	    (elisa-parse-file collection-id file))
-	  files)))
+    (dolist (file files)
+      (message "parsing %s" file)
+      (elisa-parse-file collection-id file))))
 
 ;;;###autoload
 (defun elisa-async-parse-directory (dir)
@@ -853,14 +868,14 @@ When FORCE parse even if already parsed."
 	  (libxml-parse-html-region
 	   (point) (point-max))
 	  'a))
-	:test 'string-equal)))))
+	:test #'string-equal)))))
 
 (defun elisa-search-searxng (prompt)
   "Search searxng for PROMPT and return list of urls.
 You can customize `elisa-searxng-url' to use non local instance."
   (let ((url (format "%s/search?format=json&q=%s" elisa-searxng-url (url-hexify-string prompt))))
     (thread-last
-      (plz 'get url :as 'json-read)
+      (plz 'get url :as #'json-read)
       (alist-get 'results)
       (mapcar (lambda (el) (alist-get 'url el))))))
 
@@ -896,8 +911,7 @@ You can customize `elisa-searxng-url' to use non local instance."
     (with-current-buffer buffer-name
       (shell-command-on-region
        (point-min) (point-max)
-       (format "%s -f html --to plain"
-	       (executable-find elisa-pandoc-executable))
+       (format "%s --from html --to plain" elisa-pandoc-executable)
        buffer-name t)
       buffer-name)))
 
@@ -962,11 +976,10 @@ You can customize `elisa-searxng-url' to use non local instance."
 (defun elisa--parse-web-page (collection-id url)
   "Parse URL into collection with COLLECTION-ID."
   (let ((kind-id (caar (sqlite-select
-			elisa-db "select rowid from kinds where name = 'web';"))))
-    (message "collecting data from %s" url)
-    (mapc
-     (lambda (chunk)
-       (let* ((hash (secure-hash 'sha256 chunk))
+			elisa-db "SELECT rowid FROM kinds WHERE name = 'web';"))))
+    (message "collecting data from %S..." url)
+    (dolist (chunk (elisa-extact-webpage-chunks url))
+      (let* ((hash (secure-hash 'sha256 chunk))
 	      (embedding (llm-embedding elisa-embeddings-provider chunk))
 	      (rowid
 	       (if-let ((rowid (caar (sqlite-select
@@ -989,8 +1002,7 @@ You can customize `elisa-searxng-url' to use non local instance."
 	   (sqlite-execute
 	    elisa-db
 	    (format "insert into data_fts(rowid, data) values (%s, '%s');"
-		    rowid (elisa-sqlite-escape chunk))))))
-     (elisa-extact-webpage-chunks url))))
+		    rowid (elisa-sqlite-escape chunk))))))))
 
 (defun elisa--web-search (prompt)
   "Search the web for PROMPT.
@@ -1007,11 +1019,10 @@ Return sqlite query that extract data for adding to context."
 				(elisa-sqlite-escape prompt)))))
 	 (urls (funcall elisa-web-search-function prompt))
 	 (collected-pages 0))
-    (mapc (lambda (url)
-	    (when (<= collected-pages elisa-web-pages-limit)
-	      (elisa--parse-web-page collection-id url)
-	      (cl-incf collected-pages)))
-	  urls)))
+    (dolist (url urls)
+      (when (<= collected-pages elisa-web-pages-limit)
+	(elisa--parse-web-page collection-id url)
+	(cl-incf collected-pages)))))
 
 (defun elisa--rewrite-prompt (prompt action)
   "Rewrite PROMPT if `elisa-prompt-rewriting-enabled'.
@@ -1096,26 +1107,24 @@ WHERE d.rowid in %s;"
   (mapcar
    #'file-name-base
    (cl-remove-if-not
-    (lambda (s) (or (string-suffix-p ".info" s)
-		    (string-suffix-p ".info.gz" s)))
+    (lambda (s)
+      (or (string-suffix-p ".info" s)
+	  (string-suffix-p ".info.gz" s)))
     (directory-files (with-temp-buffer
 		       (info "emacs" (current-buffer))
 		       (file-name-directory Info-current-file))))))
 
 (defun elisa-get-external-manuals ()
   "Get external manual names list."
-  (cl-remove-if
-   #'not
-   (mapcar
-    #'elisa--info-valid-p
-    (seq-uniq
-     (mapcar
-      #'file-name-base
-      (process-lines
-       (executable-find elisa-find-executable)
-       (file-truename
-	(file-name-concat user-emacs-directory "elpa"))
-       "-name" "*.info"))))))
+  (thread-last
+    (process-lines
+     elisa-find-executable
+     (file-truename (file-name-concat user-emacs-directory "elpa"))
+     "-name" "*.info")
+    (mapcar #'file-name-base)
+    (seq-uniq)
+    (mapcar #'elisa--info-valid-p)
+    (cl-remove-if #'not)))
 
 (defun elisa-parse-builtin-manuals ()
   "Parse builtin manuals."
@@ -1209,7 +1218,7 @@ It does nothing if buffer file not inside one of existing collections."
   (when-let* ((collections (flatten-tree
 			    (sqlite-select
 			     elisa-db
-			     "select name from collections;")))
+			     "SELECT name FROM collections;")))
 	      (dirs (cl-remove-if-not #'file-directory-p collections))
 	      (file (buffer-file-name))
 	      (collection (cl-find-if (lambda (dir)
@@ -1285,7 +1294,7 @@ It does nothing if buffer file not inside one of existing collections."
   "Add webpage by URL to COLLECTION."
   (interactive
    (list
-    (if-let ((url (or (and (fboundp 'thing-at-point) (thing-at-point 'url))
+    (if-let ((url (or (thing-at-point 'url)
                       (shr-url-at-point nil))))
         url
       (read-string "Enter URL you want to summarize: "))
