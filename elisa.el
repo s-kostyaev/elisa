@@ -6,7 +6,7 @@
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
 ;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
-;; Version: 1.0.0
+;; Version: 1.0.1
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
 
@@ -1160,10 +1160,10 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-pandoc-executable")
 		    ,(async-inject-variables "ellama-long-lines-length")
 		    ,(async-inject-variables "elisa-reranker-enabled")
-		    ,(async-inject-variables "load-path")
-		    ,(async-inject-variables "Info-directory-list")
 		    ,(async-inject-variables "elisa-sqlite-vector-path")
 		    ,(async-inject-variables "elisa-sqlite-vss-path")
+		    ,(async-inject-variables "load-path")
+		    ,(async-inject-variables "Info-directory-list")
 		    (require 'elisa)
 		    (,func))
 		 (lambda (res)

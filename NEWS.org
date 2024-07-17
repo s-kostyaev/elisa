@@ -1,3 +1,5 @@
+* Version 1.0.1
+- Inject missing variables.
 * Version 1.0.0
 - Add semantic split.
 - Add optional reranker.
