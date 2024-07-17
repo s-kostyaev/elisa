@@ -1,3 +1,6 @@
+* Version 1.0.2
+- Fix review issues.
+- Improve package documentation.
 * Version 1.0.1
 - Inject missing variables.
 * Version 1.0.0
