@@ -1162,6 +1162,8 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-reranker-enabled")
 		    ,(async-inject-variables "load-path")
 		    ,(async-inject-variables "Info-directory-list")
+		    ,(async-inject-variables "elisa-sqlite-vector-path")
+		    ,(async-inject-variables "elisa-sqlite-vss-path")
 		    (require 'elisa)
 		    (,func))
 		 (lambda (res)
