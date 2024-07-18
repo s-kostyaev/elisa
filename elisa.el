@@ -443,21 +443,21 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
       (let ((collection-id (or (caar (sqlite-select
 				      elisa-db
 				      (format
-				       "select rowid from collections where name = '%s';"
+				       "SELECT rowid FROM collections WHERE name = '%s';"
 				       collection-name)))
 			       (progn
 				 (sqlite-execute
 				  elisa-db
 				  (format
-				   "insert into collections (name) values ('%s');"
+				   "INSERT INTO collections (name) VALUES ('%s');"
 				   collection-name))
 				 (caar (sqlite-select
 					elisa-db
 					(format
-					 "select rowid from collections where name = '%s';"
+					 "SELECT rowid FROM collections WHERE name = '%s';"
 					 collection-name))))))
 	    (kind-id (caar (sqlite-select
-			    elisa-db "select rowid from kinds where name = 'info';")))
+			    elisa-db "SELECT rowid FROM kinds WHERE name = 'info';")))
 	    (continue t)
 	    (parsed-nodes nil))
 	(while continue
@@ -475,29 +475,29 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 			    (rowid
 			     (if-let ((rowid (caar (sqlite-select
 						    elisa-db
-						    (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+						    (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';"
 							    kind-id collection-id
 							    (elisa-sqlite-escape node-name) hash)))))
 				 nil
 			       (sqlite-execute
 				elisa-db
 				(format
-				 "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+				 "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
 				 kind-id collection-id
 				 (elisa-sqlite-escape node-name) hash (elisa-sqlite-escape text)))
 			       (caar (sqlite-select
 				      elisa-db
-				      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+				      (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';"
 					      kind-id collection-id
 					      (elisa-sqlite-escape node-name) hash))))))
 		       (when rowid
 			 (sqlite-execute
 			  elisa-db
-			  (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+			  (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
 				  rowid (elisa-vector-to-sqlite embedding)))
 			 (sqlite-execute
 			  elisa-db
-			  (format "insert into data_fts(rowid, data) values (%s, '%s');"
+			  (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
 				  rowid (elisa-sqlite-escape text))))))
 		   chunks)
 		  (push node-name parsed-nodes)
@@ -513,7 +513,7 @@ Return sqlite query.  For asyncronous execution."
   (let* ((rowids (flatten-tree
 		  (sqlite-select
 		   elisa-db
-		   (format "select rowid from data where collection_id in
+		   (format "SELECT rowid FROM data WHERE collection_id IN
  (
 SELECT rowid FROM collections WHERE name IN %s
 );"
@@ -723,7 +723,7 @@ When FORCE parse even if already parsed."
 	 (hash (secure-hash 'sha256 buf))
 	 (prev-hash (caar (sqlite-select
 			   elisa-db
-			   (format "select hash from files where path = '%s';"
+			   (format "SELECT hash FROM files WHERE path = '%s';"
 				   (elisa-sqlite-escape path))))))
     (when (or force
 	      (not prev-hash)
@@ -733,17 +733,17 @@ When FORCE parse even if already parsed."
 	      (old-row-ids
 	       (flatten-tree (sqlite-select
 			      elisa-db
-			      (format "select rowid from data where path = '%s';"
+			      (format "SELECT rowid FROM data WHERE path = '%s';"
 				      (elisa-sqlite-escape path)))))
 	      (row-ids nil)
 	      (kind-id (caar (sqlite-select
 			      elisa-db
-			      "select rowid from kinds where name = 'file';"))))
+			      "SELECT rowid FROM kinds WHERE name = 'file';"))))
 	  ;; remove old data
 	  (when prev-hash
 	    (sqlite-execute
 	     elisa-db
-	     (format "delete from files where path = '%s';"
+	     (format "DELETE FROM files WHERE path = '%s';"
 		     (elisa-sqlite-escape path))))
 	  ;; add new data
           (dolist (text chunks)
@@ -751,7 +751,7 @@ When FORCE parse even if already parsed."
 		   (rowid
 		    (if-let ((rowid (caar (sqlite-select
 					   elisa-db
-					   (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+					   (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';"
 						   kind-id collection-id
 						   (elisa-sqlite-escape path) hash)))))
 			(progn
@@ -760,23 +760,23 @@ When FORCE parse even if already parsed."
 		      (sqlite-execute
 		       elisa-db
 		       (format
-			"insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+			"INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
 			kind-id collection-id
 			(elisa-sqlite-escape path) hash (elisa-sqlite-escape text)))
 		      (caar (sqlite-select
 			     elisa-db
-			     (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';"
+			     (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';"
 				     kind-id collection-id
 				     (elisa-sqlite-escape path) hash))))))
 	      (when rowid
 		(sqlite-execute
 		 elisa-db
-		 (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+		 (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
 			 rowid (elisa-vector-to-sqlite
 				(llm-embedding elisa-embeddings-provider text))))
 		(sqlite-execute
 		 elisa-db
-		 (format "insert into data_fts(rowid, data) values (%s, '%s');"
+		 (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
 			 rowid (elisa-sqlite-escape text)))
 		(push rowid row-ids))))
 	  ;; remove old data
@@ -788,7 +788,7 @@ When FORCE parse even if already parsed."
 	  ;; save hash to files table
 	  (sqlite-execute
 	   elisa-db
-	   (format "insert into files (path, hash) values ('%s', '%s');"
+	   (format "INSERT INTO files (path, hash) VALUES ('%s', '%s');"
 		   (elisa-sqlite-escape path) hash)))))
     ;; kill buffer if it was not open before parsing
     (when (not opened)
@@ -798,7 +798,7 @@ When FORCE parse even if already parsed."
   "Delete IDS from TABLE."
   (sqlite-execute
    elisa-db
-   (format "delete from %s where rowid in %s;"
+   (format "DELETE FROM %s WHERE rowid IN %s;"
 	   table
 	   (elisa-sqlite-format-int-list ids))))
 
@@ -815,19 +815,19 @@ When FORCE parse even if already parsed."
 			  (sqlite-execute
 			   elisa-db
 			   (format
-			    "insert into collections (name) values ('%s') on conflict do nothing;"
+			    "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
 			    (elisa-sqlite-escape dir)))
 			  (caar (sqlite-select
 				 elisa-db
 				 (format
-				  "select rowid from collections where name = '%s';"
+				  "SELECT rowid FROM collections WHERE name = '%s';"
 				  (elisa-sqlite-escape dir))))))
 	 (files (elisa--file-list dir))
 	 (delete-ids (flatten-tree
 		      (sqlite-select
 		       elisa-db
 		       (format
-			"select rowid from data where collection_id = %d and path not in %s;"
+			"SELECT rowid FROM data WHERE collection_id = %d AND path NOT IN %s;"
 			collection-id
 			(elisa-sqlite-format-string-list files))))))
     (elisa--delete-data delete-ids)
@@ -937,7 +937,7 @@ You can customize `elisa-searxng-url' to use non local instance."
 	  (sqlite-select
 	   elisa-db
 	   (format
-	    "select rowid, data from data where rowid in %s;"
+	    "SELECT rowid, data FROM data WHERE rowid IN %s;"
 	    (elisa-sqlite-format-int-list ids))))))
     (json-encode `(("query" . ,prompt)
 		   ("documents" . ,docs)))))
@@ -984,24 +984,24 @@ You can customize `elisa-searxng-url' to use non local instance."
 	      (rowid
 	       (if-let ((rowid (caar (sqlite-select
 				      elisa-db
-				      (format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash)))))
+				      (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
 		   nil
 		 (sqlite-execute
 		  elisa-db
 		  (format
-		   "insert into data(kind_id, collection_id, path, hash, data) values (%s, %s, '%s', '%s', '%s');"
+		   "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
 		   kind-id collection-id url hash (elisa-sqlite-escape chunk)))
 		 (caar (sqlite-select
 			elisa-db
-			(format "select rowid from data where kind_id = %s and collection_id = %s and path = '%s' and hash = '%s';" kind-id collection-id url hash))))))
+			(format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
 	 (when rowid
 	   (sqlite-execute
 	    elisa-db
-	    (format "insert into data_embeddings(rowid, embedding) values (%s, %s);"
+	    (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
 		    rowid (elisa-vector-to-sqlite embedding)))
 	   (sqlite-execute
 	    elisa-db
-	    (format "insert into data_fts(rowid, data) values (%s, '%s');"
+	    (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
 		    rowid (elisa-sqlite-escape chunk))))))))
 
 (defun elisa--web-search (prompt)
@@ -1010,12 +1010,12 @@ Return sqlite query that extract data for adding to context."
   (sqlite-execute
    elisa-db
    (format
-    "insert into collections (name) values ('%s') on conflict do nothing;"
+    "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
     (elisa-sqlite-escape prompt)))
   (let* ((collection-id (caar (sqlite-select
 			       elisa-db
 			       (format
-				"select rowid from collections where name = '%s';"
+				"SELECT rowid FROM collections WHERE name = '%s';"
 				(elisa-sqlite-escape prompt)))))
 	 (urls (funcall elisa-web-search-function prompt))
 	 (collected-pages 0))
@@ -1256,7 +1256,7 @@ It does nothing if buffer file not inside one of existing collections."
 		   (flatten-tree
 		    (sqlite-select
 		     elisa-db
-		     "select name from collections;")))))))
+		     "SELECT name FROM collections;")))))))
     (push col elisa-enabled-collections)))
 
 ;;;###autoload
@@ -1267,7 +1267,7 @@ It does nothing if buffer file not inside one of existing collections."
     (sqlite-execute
      elisa-db
      (format
-      "insert into collections (name) values ('%s') on conflict do nothing;"
+      "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
       (elisa-sqlite-escape collection)))))
 
 ;;;###autoload
@@ -1281,11 +1281,11 @@ It does nothing if buffer file not inside one of existing collections."
      (flatten-tree
       (sqlite-select
        elisa-db
-       "select name from collections;")))))
+       "SELECT name FROM collections;")))))
   (let ((collection-id (caar (sqlite-select
 			      elisa-db
 			      (format
-			       "select rowid from collections where name = '%s';"
+			       "SELECT rowid FROM collections WHERE name = '%s';"
 			       (elisa-sqlite-escape collection))))))
     (elisa--async-do (lambda () (elisa-parse-file collection-id file)))))
 
@@ -1303,11 +1303,11 @@ It does nothing if buffer file not inside one of existing collections."
      (flatten-tree
       (sqlite-select
        elisa-db
-       "select name from collections;")))))
+       "SELECT name FROM collections;")))))
   (let ((collection-id (caar (sqlite-select
 			      elisa-db
 			      (format
-			       "select rowid from collections where name = '%s';"
+			       "SELECT rowid FROM collections WHERE name = '%s';"
 			       (elisa-sqlite-escape collection))))))
     (elisa--async-do (lambda () (elisa--parse-web-page collection-id url)))))
 
@@ -1321,17 +1321,17 @@ It does nothing if buffer file not inside one of existing collections."
 		   (flatten-tree
 		    (sqlite-select
 		     elisa-db
-		     "select name from collections;")))))
+		     "SELECT name FROM collections;")))))
 	 (collection-id (caar (sqlite-select
 			       elisa-db
 			       (format
-				"select rowid from collections where name = '%s';"
+				"SELECT rowid FROM collections WHERE name = '%s';"
 				(elisa-sqlite-escape col)))))
 	 (delete-ids (flatten-tree
 		      (sqlite-select
 		       elisa-db
 		       (format
-			"select rowid from data where collection_id = %d;"
+			"SELECT rowid FROM data WHERE collection_id = %d;"
 			collection-id)))))
     (elisa-disable-collection col)
     (when (file-directory-p col)
@@ -1340,18 +1340,18 @@ It does nothing if buffer file not inside one of existing collections."
 	      (sqlite-select
 	       elisa-db
 	       (format
-		"select distinct path from data where collection_id = %d;"
+		"SELECT DISTINCT path FROM data WHERE collection_id = %d;"
 		collection-id)))))
 	(sqlite-execute
 	 elisa-db
 	 (format
-	  "delete from files where path in %s;"
+	  "DELETE FROM files WHERE path IN %s;"
 	  (elisa-sqlite-format-string-list files)))))
     (elisa--delete-data delete-ids)
     (sqlite-execute
      elisa-db
      (format
-      "delete from collections where rowid = %d;"
+      "DELETE FROM collections WHERE rowid = %d;"
       collection-id))))
 
 (defun elisa--gen-chat (&optional collections)
