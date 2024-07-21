@@ -197,6 +197,10 @@ How to buy a pony?
   "Prompt template for prompt rewriting."
   :type 'string)
 
+(defcustom elisa-tika-url "http://localhost:9998/"
+  "Apache tika url for file parsing."
+  :type 'string)
+
 (defcustom elisa-searxng-url "http://localhost:8080/"
   "Searxng url for web search.  Json format should be enabled for this instance."
   :type 'string)
@@ -207,6 +211,10 @@ How to buy a pony?
 
 (defcustom elisa-webpage-extraction-function #'elisa-get-webpage-buffer
   "Function to get buffer with webpage content."
+  :type 'function)
+
+(defcustom elisa-complex-file-extraction-function #'elisa-parse-with-tika-buffer
+  "Function to get buffer with complex file (like pdf, odt etc.) content."
   :type 'function)
 
 (defcustom elisa-web-search-function #'elisa-search-duckduckgo
@@ -870,6 +878,63 @@ When FORCE parse even if already parsed."
 	  'a))
 	:test #'string-equal)))))
 
+(defun elisa-starts-with-lowercase-p (string)
+  "Check if STRING start with lowercase character."
+  (let ((category (get-char-code-property (seq-first string) 'general-category)))
+    (or (eq 'Ll category)
+	(eq 'Ps category))))
+
+(defun elisa-dehyphen (text)
+  "Dehyphen TEXT."
+  (ignore-errors (with-temp-buffer
+		   (insert (string-join
+			    (mapcar #'string-trim (string-split text "\n"))
+			    "\n"))
+		   (goto-char (point-min))
+		   (while (not (eobp))
+		     (end-of-line)
+		     (if (eq (preceding-char) ?-)
+			 (progn
+			   (delete-char 1)
+			   (delete-char -1))
+		       (forward-line)))
+		   (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defun elisa-parse-with-tika-buffer (file)
+  "Parse FILE with tika."
+  (let* ((url (format "%s/tika" (string-trim-right elisa-tika-url "/")))
+	 (buf (plz 'put url :body (list 'file file) :as 'buffer))
+	 (shr-use-fonts nil)
+	 (shr-width (- ellama-long-lines-length 5))
+	 (data (with-current-buffer buf
+		 (libxml-parse-html-region (point-min) (point-max))))
+	 (prev-elt nil))
+    (dolist (elt (dom-by-tag data 'p))
+      (dolist (text (dom-children elt))
+	;; trim string content
+	(when-let* ((trimmed-text (string-trim text))
+		    (new-elt (if (or (string-match "^[0-9]+$" trimmed-text)
+				     (string= "" trimmed-text))
+				 (progn (dom-remove-node data elt)
+					nil)
+			       (if (elisa-starts-with-lowercase-p trimmed-text)
+				   (progn
+				     (dom-remove-node data prev-elt)
+				     (dom-node 'p nil (elisa-dehyphen
+						       (concat
+							(car (dom-children prev-elt))
+							"\n" trimmed-text))))
+				 (dom-node 'p nil (elisa-dehyphen trimmed-text))))))
+	  (setq prev-elt new-elt)
+	  (setq data (cl-nsubst new-elt elt data :test #'equal))))
+      (when (eq (length (dom-children elt)) 0)
+	(dom-remove-node data elt)))
+    (with-current-buffer buf
+      (delete-region (point-min) (point-max))
+      (ignore-errors
+	(shr-insert-document data))
+      buf)))
+
 (defun elisa-search-searxng (prompt)
   "Search searxng for PROMPT and return list of urls.
 You can customize `elisa-searxng-url' to use non local instance."
@@ -1166,7 +1231,9 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-rewrite-prompt-template")
 		    ,(async-inject-variables "elisa-semantic-split-function")
 		    ,(async-inject-variables "elisa-webpage-extraction-function")
+		    ,(async-inject-variables "elisa-complex-file-extraction-function")
 		    ,(async-inject-variables "elisa-web-search-function")
+		    ,(async-inject-variables "elisa-tika-url")
 		    ,(async-inject-variables "elisa-searxng-url")
 		    ,(async-inject-variables "elisa-web-pages-limit")
 		    ,(async-inject-variables "elisa-breakpoint-threshold-amount")
