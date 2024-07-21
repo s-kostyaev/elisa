@@ -1152,7 +1152,11 @@ WHERE d.rowid in %s;"
 (defun elisa--async-do (func &optional on-done)
   "Do FUNC asyncronously.
 Call ON-DONE callback with result as an argument after FUNC evaluation done."
-  (let ((command real-this-command))
+  (let* ((command real-this-command)
+	 (reporter (make-progress-reporter (if command
+					       (prin1-to-string command)
+					     "elisa async processing")))
+	 (timer (run-at-time t 0.2 (lambda () (progress-reporter-update reporter)))))
     (async-start `(lambda ()
 		    ,(async-inject-variables "elisa-embeddings-provider")
 		    ,(async-inject-variables "elisa-db-directory")
@@ -1176,12 +1180,12 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    (require 'elisa)
 		    (,func))
 		 (lambda (res)
+		   (cancel-timer timer)
+		   (progress-reporter-done reporter)
 		   (sqlite-close elisa-db)
 		   (elisa--reopen-db)
 		   (when on-done
-		     (funcall on-done res))
-		   (message "%s done."
-			    (or command "async elisa processing"))))))
+		     (funcall on-done res))))))
 
 (defun elisa-extact-webpage-chunks (url)
   "Extract semantic chunks for webpage fetched from URL."
