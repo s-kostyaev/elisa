@@ -1,3 +1,5 @@
+* Version 1.0.4
+- Add progress reporter for async operations.
 * Version 1.0.3
 - Make sql syntax uppercased to improve readability.
 * Version 1.0.2

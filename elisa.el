@@ -6,7 +6,7 @@
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
 ;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
-;; Version: 1.0.3
+;; Version: 1.0.4
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
 
