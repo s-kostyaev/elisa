@@ -268,6 +268,15 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Enabled collections for elisa chat."
   :type '(repeat string))
 
+(defcustom elisa-supported-complex-document-extensions '("doc" "dot" "ppt" "xls" "rtf" "docx" "pptx" "xlsx" "xlsm" "pdf" "epub" "msg" "odt" "odp" "ods" "odg" "docm")
+  "Supported complex document file extensions."
+  :type '(repeat string))
+
+(defun elisa-supported-complex-document-p (path)
+  "Check if PATH contain supported complex document."
+  (cl-find (file-name-extension path)
+	   elisa-supported-complex-document-extensions :test #'string=))
+
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system.
 Sqlite vss is an extension to sqlite providing vector search
@@ -720,14 +729,18 @@ than T, it will be packed into single semantic chunk."
 		  (and (not (seq-some (lambda (regexp)
 					(string-match-p regexp file))
 				      ignore-regexps))
-		       (elisa--text-file-p file)))
+		       (or
+			(elisa-supported-complex-document-p file)
+			(elisa--text-file-p file))))
 		(directory-files-recursively directory ".*"))))
 
 (defun elisa-parse-file (collection-id path &optional force)
   "Parse file PATH for COLLECTION-ID.
 When FORCE parse even if already parsed."
   (let* ((opened (get-file-buffer path))
-	 (buf (or opened (find-file-noselect path t t)))
+	 (buf (if (elisa-supported-complex-document-p path)
+		  (funcall elisa-complex-file-extraction-function path)
+		(or opened (find-file-noselect path t t))))
 	 (hash (secure-hash 'sha256 buf))
 	 (prev-hash (caar (sqlite-select
 			   elisa-db
@@ -1231,6 +1244,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-rewrite-prompt-template")
 		    ,(async-inject-variables "elisa-semantic-split-function")
 		    ,(async-inject-variables "elisa-webpage-extraction-function")
+		    ,(async-inject-variables "elisa-supported-complex-document-extensions")
 		    ,(async-inject-variables "elisa-complex-file-extraction-function")
 		    ,(async-inject-variables "elisa-web-search-function")
 		    ,(async-inject-variables "elisa-tika-url")
