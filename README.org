@@ -46,8 +46,7 @@ relevant information to context and let LLM answer user query.
 
 *** PDF files support
 
-Currently PDF files parsing not supported. You can use [[https://github.com/VikParuchuri/marker][marker]] to
-convert it and then create collection from result markdown files.
+For pdf, doc and other complex documents support used [[https://tika.apache.org][Apache Tika]].
 
 ** Installation
 
@@ -90,6 +89,14 @@ I prefer this models:
   ollama pull gemma2:9b-instruct-q6_K
   ollama pull chatfire/bge-m3:q8_0
 #+end_src
+
+**** Complex documents
+
+For pdf, doc etc. you need to run [[https://tika.apache.org][Apache Tika]] service locally. You can do it using docker:
+
+#+BEGIN_SRC shell
+  docker run -d -p 127.0.0.1:9998:9998 apache/tika:latest-full
+#+END_SRC
 
 **** Reranker
 
@@ -358,6 +365,22 @@ Example configuration.
     * Description: Toggles whether invisible files and directories should be ignored during
       parsing.
     * Default: ~t~ (true)
+
++ ~elisa-tika-url~:
+    * Type: String
+    * Description: Apache tika url for file parsing.
+    * Default: ~"http://localhost:9998/"~
+
++ ~elisa-complex-file-extraction-function~:
+    * Type: Function
+    * Description: Function to get buffer with complex file (like pdf,
+      odt etc.) content.
+    * Default: ~#'elisa-parse-with-tika-buffer~
+
++ ~elisa-supported-complex-document-extensions~:
+    * Type: List of strings
+    * Description: Supported complex document file extensions.
+    * Default: ~'("doc" "dot" "ppt" "xls" "rtf" "docx" "pptx" "xlsx" "xlsm" "pdf" "epub" "msg" "odt" "odp" "ods" "odg" "docm")~
 
 **** ELISA Chat Collections
 
