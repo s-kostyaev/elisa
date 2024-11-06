@@ -87,6 +87,7 @@ I prefer this models:
 
 #+begin_src shell
   ollama pull gemma2:9b-instruct-q6_K
+  ollama pull qwen2.5:3b
   ollama pull chatfire/bge-m3:q8_0
 #+end_src
 
@@ -214,12 +215,20 @@ Example configuration.
     (require 'llm-ollama)
     ;; gemma 2 works very good in my use cases
     ;; it also boasts strong multilingual capabilities
+    ;; (setopt elisa-chat-provider
+    ;; 	  (make-llm-ollama
+    ;; 	   :chat-model "gemma2:9b-instruct-q6_K"
+    ;; 	   :embedding-model "chatfire/bge-m3:q8_0"
+    ;; 	   ;; set context window to 8k
+    ;; 	   :default-chat-non-standard-params '(("num_ctx" . 8192))))
+    ;;
+    ;; qwen 2.5 3b works good in my test cases and provide longer context
     (setopt elisa-chat-provider
-	    (make-llm-ollama
-	     :chat-model "gemma2:9b-instruct-q6_K"
-	     :embedding-model "chatfire/bge-m3:q8_0"
-	     ;; set context window to 8k
-	     :default-chat-non-standard-params '(("num_ctx" . 8192))))
+	  (make-llm-ollama
+	   :chat-model "qwen2.5:3b"
+	   :embedding-model "chatfire/bge-m3:q8_0"
+	   :default-chat-temperature 0.1
+	   :default-chat-non-standard-params '(("num_ctx" . 32768))))
     ;; this embedding model has stong multilingual capabilities
     (setopt elisa-embeddings-provider (make-llm-ollama :embedding-model "chatfire/bge-m3:q8_0"))
     :config

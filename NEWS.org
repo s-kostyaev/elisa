@@ -1,3 +1,5 @@
+* Version 1.1.1
+- Improve prompt template for prompt rewriting.
 * Version 1.1.0
 - Add complex documents (like pdf, odt, doc etc.) support using [[https://tika.apache.org][Apache Tika]].
 * Version 1.0.4

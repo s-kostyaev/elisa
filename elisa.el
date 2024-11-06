@@ -6,7 +6,7 @@
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
 ;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
-;; Version: 1.1.0
+;; Version: 1.1.1
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
 
@@ -178,22 +178,25 @@ LLM together with context."
   :type 'string)
 
 (defcustom elisa-rewrite-prompt-template
-  "You are professional search agent. With given context and user
-prompt you need to create new prompt for search. It should be
-concise and useful without additional context. Response with
-prompt only. You should replace all words like 'this' or 'it' to
-its values to make search successful. If user prompt contains
-question your prompt should also be in form of question. For
-example:
-
-- What is pony?
-- Pony is ...
-- How to buy it?
+  "<INSTRUCTIONS>
+You are professional search agent. With given context and user
+prompt you need to create new prompt for search **IN THE SAME
+LANGUAGE AS ORIGINAL USER PROMPT**. It should be concise and
+useful without additional context. Response with prompt only. You
+should replace all words like 'this' or 'it' to its values to
+make search successful. If user prompt contains question your
+prompt should also be in form of question.
+ </INSTRUCTIONS>
+<EXAMPLE>
+ - What is pony?
+ - Pony is ...
+ - How to buy it?
 
 How to buy a pony?
-
- User prompt:
-%s"
+</EXAMPLE>
+<USER_PROMPT>
+%s
+</USER_PROMPT>"
   "Prompt template for prompt rewriting."
   :type 'string)
 
