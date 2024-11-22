@@ -455,6 +455,14 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Calculate breakpoint threshold for DISTANCES based on K standard deviations."
   (+ (elisa-avg distances) (* k (elisa-std-dev distances))))
 
+(defun elisa-embeddings (chunks)
+  "Calculate embeddings for CHUNKS.
+Return list of vectors."
+  (let ((provider elisa-embeddings-provider))
+    (if (member 'embeddings-batch (llm-capabilities provider))
+	(llm-batch-embeddings provider chunks)
+      (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
+
 (defun elisa-parse-info-manual (name collection-name)
   "Parse info manual with NAME and save index to COLLECTION-NAME."
   (with-temp-buffer
