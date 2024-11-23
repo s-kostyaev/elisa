@@ -305,6 +305,10 @@ Example configuration.
     * Type: String
     * Description: Template used for rewriting prompts for better retrieval.
 
++ ~elisa-batch-embeddings-enabled~:
+    * Type: Boolean
+    * Description: Enable batch embeddings if supported.
+
 **** Web Search and Integration
 
 + ~elisa-searxng-url~:

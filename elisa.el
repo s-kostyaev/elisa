@@ -5,7 +5,7 @@
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
 ;; Keywords: help local tools
-;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.9.1") (async "1.9.8") (plz "0.9"))
+;; Package-Requires: ((emacs "29.2") (ellama "0.11.2") (llm "0.18.1") (async "1.9.8") (plz "0.9"))
 ;; Version: 1.1.1
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Created: 18th Feb 2024
@@ -275,6 +275,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Supported complex document file extensions."
   :type '(repeat string))
 
+(defcustom elisa-batch-embeddings-enabled nil
+  "Enable batch embeddings if supported."
+  :type 'boolean)
+
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
   (cl-find (file-name-extension path)
@@ -454,6 +458,23 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
 (defun elisa-calculate-threshold (k distances)
   "Calculate breakpoint threshold for DISTANCES based on K standard deviations."
   (+ (elisa-avg distances) (* k (elisa-std-dev distances))))
+
+(defun elisa-string-empty-p (s)
+  "Check if string S contain only spacing."
+  (length= (string-trim s) 0))
+
+(defun elisa-filter-strings (chunks)
+  "Filter out empty CHUNKS."
+  (cl-remove-if #'elisa-string-empty-p chunks))
+
+(defun elisa-embeddings (chunks)
+  "Calculate embeddings for CHUNKS.
+Return list of vectors."
+  (let ((provider elisa-embeddings-provider))
+    (if (and elisa-batch-embeddings-enabled
+	     (member 'embeddings-batch (llm-capabilities provider)))
+	(llm-batch-embeddings provider chunks)
+      (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
 
 (defun elisa-parse-info-manual (name collection-name)
   "Parse info manual with NAME and save index to COLLECTION-NAME."
@@ -673,13 +694,8 @@ ARGS contains keys for fine control.
 than T, it will be packed into single semantic chunk."
   (if-let* ((func (or (plist-get args :function) elisa-semantic-split-function))
 	    (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
-	    (chunks (funcall func))
-	    (embeddings (cl-remove-if
-			 #'not
-			 (mapcar (lambda (s)
-				   (when (length> (string-trim s) 0)
-				     (llm-embedding elisa-embeddings-provider s)))
-				 chunks)))
+	    (chunks (elisa-filter-strings (funcall func)))
+	    (embeddings (elisa-embeddings chunks))
 	    (distances (elisa--distances embeddings))
 	    (threshold (elisa-calculate-threshold k distances))
 	    (current (car chunks))
@@ -867,8 +883,11 @@ When FORCE parse even if already parsed."
 		     (elisa-parse-directory
 		      (expand-file-name dir)))))
 
+(defvar eww-accept-content-types)
+
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
+  (require 'eww)
   (let* ((url (format "https://duckduckgo.com/html/?q=%s" (url-hexify-string prompt)))
 	 (buffer-name (plz 'get url :as 'buffer
 			:headers `(("Accept" . ,eww-accept-content-types)
@@ -962,6 +981,7 @@ You can customize `elisa-searxng-url' to use non local instance."
 
 (defun elisa-get-webpage-buffer (url)
   "Get buffer with URL content."
+  (require 'eww)
   (let ((buffer-name (ignore-errors
 		       (plz 'get url :as 'buffer
 			 :headers `(("Accept" . ,eww-accept-content-types)
@@ -1244,6 +1264,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-find-executable")
 		    ,(async-inject-variables "elisa-tar-executable")
 		    ,(async-inject-variables "elisa-prompt-rewriting-enabled")
+		    ,(async-inject-variables "elisa-batch-embeddings-enabled")
 		    ,(async-inject-variables "elisa-rewrite-prompt-template")
 		    ,(async-inject-variables "elisa-semantic-split-function")
 		    ,(async-inject-variables "elisa-webpage-extraction-function")
