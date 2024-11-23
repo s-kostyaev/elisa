@@ -455,6 +455,14 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Calculate breakpoint threshold for DISTANCES based on K standard deviations."
   (+ (elisa-avg distances) (* k (elisa-std-dev distances))))
 
+(defun elisa-string-empty-p (s)
+  "Check if string S contain only spacing."
+  (length= (string-trim s) 0))
+
+(defun elisa-filter-strings (chunks)
+  "Filter out empty CHUNKS."
+  (cl-remove-if #'elisa-string-empty-p chunks))
+
 (defun elisa-embeddings (chunks)
   "Calculate embeddings for CHUNKS.
 Return list of vectors."
@@ -681,13 +689,8 @@ ARGS contains keys for fine control.
 than T, it will be packed into single semantic chunk."
   (if-let* ((func (or (plist-get args :function) elisa-semantic-split-function))
 	    (k (or (plist-get args :threshold-amount) elisa-breakpoint-threshold-amount))
-	    (chunks (funcall func))
-	    (embeddings (cl-remove-if
-			 #'not
-			 (mapcar (lambda (s)
-				   (when (length> (string-trim s) 0)
-				     (llm-embedding elisa-embeddings-provider s)))
-				 chunks)))
+	    (chunks (elisa-filter-strings (funcall func)))
+	    (embeddings (elisa-embeddings chunks))
 	    (distances (elisa--distances embeddings))
 	    (threshold (elisa-calculate-threshold k distances))
 	    (current (car chunks))
