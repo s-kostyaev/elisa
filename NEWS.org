@@ -1,3 +1,6 @@
+* Version 1.1.2
+- Speed up semantic splitting with batch embeddings. Experimental.
+  Disabled by default.
 * Version 1.1.1
 - Improve prompt template for prompt rewriting.
 * Version 1.1.0
