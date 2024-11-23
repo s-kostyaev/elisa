@@ -878,8 +878,11 @@ When FORCE parse even if already parsed."
 		     (elisa-parse-directory
 		      (expand-file-name dir)))))
 
+(defvar eww-accept-content-types)
+
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
+  (require 'eww)
   (let* ((url (format "https://duckduckgo.com/html/?q=%s" (url-hexify-string prompt)))
 	 (buffer-name (plz 'get url :as 'buffer
 			:headers `(("Accept" . ,eww-accept-content-types)
@@ -973,6 +976,7 @@ You can customize `elisa-searxng-url' to use non local instance."
 
 (defun elisa-get-webpage-buffer (url)
   "Get buffer with URL content."
+  (require 'eww)
   (let ((buffer-name (ignore-errors
 		       (plz 'get url :as 'buffer
 			 :headers `(("Accept" . ,eww-accept-content-types)
