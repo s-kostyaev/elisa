@@ -1,3 +1,5 @@
+* Version 1.1.3
+- Add command to enable all collections.
 * Version 1.1.2
 - Speed up semantic splitting with batch embeddings. Experimental.
   Disabled by default.
