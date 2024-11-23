@@ -275,6 +275,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Supported complex document file extensions."
   :type '(repeat string))
 
+(defcustom elisa-batch-embeddings-enabled nil
+  "Enable batch embeddings if supported."
+  :type 'boolean)
+
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
   (cl-find (file-name-extension path)
@@ -467,7 +471,8 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Calculate embeddings for CHUNKS.
 Return list of vectors."
   (let ((provider elisa-embeddings-provider))
-    (if (member 'embeddings-batch (llm-capabilities provider))
+    (if (and elisa-batch-embeddings-enabled
+	     (member 'embeddings-batch (llm-capabilities provider)))
 	(llm-batch-embeddings provider chunks)
       (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
 
@@ -1259,6 +1264,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-find-executable")
 		    ,(async-inject-variables "elisa-tar-executable")
 		    ,(async-inject-variables "elisa-prompt-rewriting-enabled")
+		    ,(async-inject-variables "elisa-batch-embeddings-enabled")
 		    ,(async-inject-variables "elisa-rewrite-prompt-template")
 		    ,(async-inject-variables "elisa-semantic-split-function")
 		    ,(async-inject-variables "elisa-webpage-extraction-function")
