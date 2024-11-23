@@ -1369,6 +1369,19 @@ It does nothing if buffer file not inside one of existing collections."
     (push col elisa-enabled-collections)))
 
 ;;;###autoload
+(defun elisa-enable-all-collections ()
+  "Enable all collections."
+  (interactive)
+  (let ((all-collections
+	 (flatten-tree
+	  (sqlite-select
+	   elisa-db
+	   "SELECT DISTINCT name FROM collections;"))))
+    (setq elisa-enabled-collections
+	  (cl-set-difference all-collections elisa-enabled-collections :test #'string=))
+    (mapc #'elisa-enable-collection all-collections)))
+
+;;;###autoload
 (defun elisa-create-empty-collection (&optional collection)
   "Create new empty COLLECTION."
   (interactive "sNew collection name: ")

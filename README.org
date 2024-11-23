@@ -187,6 +187,10 @@ Add webpage to collection.
 
 Enable collection for ~elisa-chat~.
 
+*** elisa-enable-all-collections
+
+Enable all collections.
+
 *** elisa-disable-collection
 
 Disable collection.
