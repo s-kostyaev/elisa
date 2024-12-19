@@ -1,6 +1,6 @@
 ;;; elisa.el --- Emacs Lisp Information System Assistant -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024  Free Software Foundation, Inc.
+;; Copyright (C) 2024, 2025 Free Software Foundation, Inc.
 
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
@@ -279,6 +279,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Enable batch embeddings if supported."
   :type 'boolean)
 
+(defcustom elisa-batch-size 300
+  "Batch size to send to provider during batch embeddings calculation."
+  :type 'integer)
+
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
   (cl-find (file-name-extension path)
@@ -473,7 +477,8 @@ Return list of vectors."
   (let ((provider elisa-embeddings-provider))
     (if (and elisa-batch-embeddings-enabled
 	     (member 'embeddings-batch (llm-capabilities provider)))
-	(llm-batch-embeddings provider chunks)
+	(let ((batches (seq-partition chunks elisa-batch-size)))
+	  (flatten-list (mapcar (lambda (batch) (llm-batch-embeddings provider batch)) batches)))
       (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
 
 (defun elisa-parse-info-manual (name collection-name)
@@ -1265,6 +1270,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-tar-executable")
 		    ,(async-inject-variables "elisa-prompt-rewriting-enabled")
 		    ,(async-inject-variables "elisa-batch-embeddings-enabled")
+		    ,(async-inject-variables "elisa-batch-size")
 		    ,(async-inject-variables "elisa-rewrite-prompt-template")
 		    ,(async-inject-variables "elisa-semantic-split-function")
 		    ,(async-inject-variables "elisa-webpage-extraction-function")
