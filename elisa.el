@@ -1,6 +1,6 @@
 ;;; elisa.el --- Emacs Lisp Information System Assistant -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024  Free Software Foundation, Inc.
+;; Copyright (C) 2024, 2025 Free Software Foundation, Inc.
 
 ;; Author: Sergey Kostyaev <sskostyaev@gmail.com>
 ;; URL: http://github.com/s-kostyaev/elisa
@@ -107,6 +107,7 @@
 (require 'shr)
 (require 'plz)
 (require 'json)
+(require 'sqlite)
 
 (defgroup elisa nil
   "RAG implementation for `ellama'."
@@ -279,6 +280,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Enable batch embeddings if supported."
   :type 'boolean)
 
+(defcustom elisa-batch-size 300
+  "Batch size to send to provider during batch embeddings calculation."
+  :type 'integer)
+
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
   (cl-find (file-name-extension path)
@@ -349,6 +354,10 @@ database."
   "Generate sql for create data embeddings table."
   (format "CREATE VIRTUAL TABLE IF NOT EXISTS data_embeddings USING vss0(embedding(%d));"
 	  (elisa-get-embedding-size)))
+
+(defun elisa-data-embeddings-drop-table-sql ()
+  "Generate sql for drop data embeddings table."
+  "DROP TABLE IF EXISTS data_embeddings;")
 
 (defun elisa-data-fts-create-table-sql ()
   "Generate sql for create full text search table."
@@ -473,7 +482,8 @@ Return list of vectors."
   (let ((provider elisa-embeddings-provider))
     (if (and elisa-batch-embeddings-enabled
 	     (member 'embeddings-batch (llm-capabilities provider)))
-	(llm-batch-embeddings provider chunks)
+	(let ((batches (seq-partition chunks elisa-batch-size)))
+	  (flatten-list (mapcar (lambda (batch) (llm-batch-embeddings provider batch)) batches)))
       (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
 
 (defun elisa-parse-info-manual (name collection-name)
@@ -1265,6 +1275,7 @@ Call ON-DONE callback with result as an argument after FUNC evaluation done."
 		    ,(async-inject-variables "elisa-tar-executable")
 		    ,(async-inject-variables "elisa-prompt-rewriting-enabled")
 		    ,(async-inject-variables "elisa-batch-embeddings-enabled")
+		    ,(async-inject-variables "elisa-batch-size")
 		    ,(async-inject-variables "elisa-rewrite-prompt-template")
 		    ,(async-inject-variables "elisa-semantic-split-function")
 		    ,(async-inject-variables "elisa-webpage-extraction-function")
@@ -1491,6 +1502,35 @@ Find similar quotes in COLLECTIONS and add it to context."
   (interactive "sAsk elisa: ")
   (let ((cols (or collections elisa-enabled-collections)))
     (elisa--rewrite-prompt prompt (elisa--gen-chat cols))))
+
+(defun elisa-recalculate-embeddings ()
+  "Recalculate and save new embeddings after embedding provider change."
+  (sqlite-execute elisa-db "DELETE FROM data WHERE data = '';") ;; remove rows without data
+  (let* ((data-rows (sqlite-select elisa-db "SELECT rowid, data FROM data;"))
+	 (texts (mapcar #'cadr data-rows))
+	 (rowids (mapcar #'car data-rows))
+	 (embeddings (elisa-embeddings texts))
+	 (len (length rowids))
+	 (i 0))
+    ;; Recreate embeddings table
+    (sqlite-execute elisa-db (elisa-data-embeddings-drop-table-sql))
+    (sqlite-execute elisa-db (elisa-data-embeddings-create-table-sql))
+    ;; Recalculate embeddings
+    (with-sqlite-transaction elisa-db
+      (while (< i len)
+	(let ((rowid (nth i rowids))
+	      (embedding (nth i embeddings)))
+	  (sqlite-execute
+	   elisa-db
+	   (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
+		   rowid (elisa-vector-to-sqlite embedding)))
+	  (setq i (1+ i)))))))
+
+;;;###autoload
+(defun elisa-async-recalculate-embeddings ()
+  "Recalculate embeddings asynchronously."
+  (interactive)
+  (elisa--async-do 'elisa-recalculate-embeddings))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
