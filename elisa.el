@@ -1505,6 +1505,7 @@ Find similar quotes in COLLECTIONS and add it to context."
 
 (defun elisa-recalculate-embeddings ()
   "Recalculate and save new embeddings after embedding provider change."
+  (sqlite-execute elisa-db "DELETE FROM data WHERE data = '';") ;; remove rows without data
   (let* ((data-rows (sqlite-select elisa-db "SELECT rowid, data FROM data;"))
 	 (texts (mapcar #'cadr data-rows))
 	 (rowids (mapcar #'car data-rows))
