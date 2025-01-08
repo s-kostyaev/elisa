@@ -213,6 +213,21 @@ for deeper research and wider topic coverage.
   "Prompt template for research subtopics generation."
   :type 'string)
 
+(defcustom elisa-research-questions-generator-template
+  "<INSTRUCTIONS>
+You are professional researcher. User will provide you a topic or
+a question and subtopic for research. You need to generate list
+of questions for search to cover this subtopic. Focus on subtopic.
+</INSTRUCTIONS>
+<TOPIC>
+%s
+</TOPIC>
+<SUBTOPIC>
+%s
+</SUBTOPIC>"
+  "Prompt template for research questions generation."
+  :type 'string)
+
 (defcustom elisa-tika-url "http://localhost:9998/"
   "Apache tika url for file parsing."
   :type 'string)
