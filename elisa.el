@@ -201,6 +201,18 @@ How to buy a pony?
   "Prompt template for prompt rewriting."
   :type 'string)
 
+(defcustom elisa-research-subtopic-generator-template
+  "<INSTRUCTIONS>
+You are professional researcher. User will provide you a topic or
+a question for research. You need to generate list of subtopics
+for deeper research and wider topic coverage.
+</INSTRUCTIONS>
+<USER_PROMPT>
+%s
+</USER_PROMPT>"
+  "Prompt template for research subtopics generation."
+  :type 'string)
+
 (defcustom elisa-tika-url "http://localhost:9998/"
   "Apache tika url for file parsing."
   :type 'string)
@@ -1532,6 +1544,25 @@ Find similar quotes in COLLECTIONS and add it to context."
   "Recalculate embeddings asynchronously."
   (interactive)
   (elisa--async-do 'elisa-recalculate-embeddings))
+
+(defun elisa-research-generate-subtopics (topic)
+  "Generate subtopics for research TOPIC."
+  (interactive "sResearch topic: ")
+  (ellama-instant (format
+		   elisa-research-subtopic-generator-template
+		   topic)
+		  :provider elisa-chat-provider
+		  ;; TODO: instead of direct extraction add ability to
+		  ;; user to change proposed subtopics and call
+		  ;; extraction by keybinding or to skip this step in
+		  ;; configuration
+		  :on-done (lambda (result)
+			     (ellama-extract-list-async
+			      "subtopics"
+			      ;; TODO: save data into ellama session
+			      (lambda (res)
+				(message "extracted subtopics: %s" res))
+			      result))))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
