@@ -201,30 +201,30 @@ How to buy a pony?
   "Prompt template for prompt rewriting."
   :type 'string)
 
-(defcustom elisa-research-subtopic-generator-template
+(defcustom elisa-research-topics-generator-template
   "<INSTRUCTIONS>
-You are professional researcher. User will provide you a topic or
-a question for research. You need to generate list of subtopics
-for deeper research and wider topic coverage.
+You are professional researcher. User will provide you a theme
+for research. You need to generate list of topics for deeper
+research and wider theme coverage.
 </INSTRUCTIONS>
-<USER_PROMPT>
+<THEME>
 %s
-</USER_PROMPT>"
-  "Prompt template for research subtopics generation."
+</THEME>"
+  "Prompt template for research topics generation."
   :type 'string)
 
 (defcustom elisa-research-questions-generator-template
   "<INSTRUCTIONS>
-You are professional researcher. User will provide you a topic or
-a question and subtopic for research. You need to generate list
-of questions for search to cover this subtopic. Focus on subtopic.
+You are professional researcher. User will provide you a theme
+and a topic for research. You need to generate list of questions
+for search to cover this topic. Focus on topic.
 </INSTRUCTIONS>
+<THEME>
+%s
+</THEME>
 <TOPIC>
 %s
-</TOPIC>
-<SUBTOPIC>
-%s
-</SUBTOPIC>"
+</TOPIC>"
   "Prompt template for research questions generation."
   :type 'string)
 
@@ -1560,23 +1560,23 @@ Find similar quotes in COLLECTIONS and add it to context."
   (interactive)
   (elisa--async-do 'elisa-recalculate-embeddings))
 
-(defun elisa-research-generate-subtopics (topic)
-  "Generate subtopics for research TOPIC."
+(defun elisa-research-generate-topics (theme)
+  "Generate topics for research THEME."
   (interactive "sResearch topic: ")
   (ellama-instant (format
-		   elisa-research-subtopic-generator-template
-		   topic)
+		   elisa-research-topics-generator-template
+		   theme)
 		  :provider elisa-chat-provider
 		  ;; TODO: instead of direct extraction add ability to
-		  ;; user to change proposed subtopics and call
+		  ;; user to change proposed topics and call
 		  ;; extraction by keybinding or to skip this step in
 		  ;; configuration
 		  :on-done (lambda (result)
 			     (ellama-extract-list-async
-			      "subtopics"
+			      "topics"
 			      ;; TODO: save data into ellama session
 			      (lambda (res)
-				(message "extracted subtopics: %s" res))
+				(message "extracted topics: %s" res))
 			      result))))
 
 (provide 'elisa)
