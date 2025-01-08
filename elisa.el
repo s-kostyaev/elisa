@@ -1560,6 +1560,22 @@ Find similar quotes in COLLECTIONS and add it to context."
   (interactive)
   (elisa--async-do 'elisa-recalculate-embeddings))
 
+(defun elisa-research-extract-topics-async ()
+  "Extract topics from current buffer asynchronously."
+  (interactive)
+  (ellama-extract-list-async
+   "topics"
+   ;; TODO: save data into ellama session and start main loop
+   (lambda (res)
+     (message "extracted topics: %s" res))
+   (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun elisa-bind-topic-extraction ()
+  "Bind topic extraction."
+  (local-set-key (kbd "C-c C-c") #'elisa-research-extract-topics-async)
+  (message "Press C-c C-c to start research"))
+
+;;;###autoload
 (defun elisa-research-generate-topics (theme)
   "Generate topics for research THEME."
   (interactive "sResearch topic: ")
@@ -1567,17 +1583,7 @@ Find similar quotes in COLLECTIONS and add it to context."
 		   elisa-research-topics-generator-template
 		   theme)
 		  :provider elisa-chat-provider
-		  ;; TODO: instead of direct extraction add ability to
-		  ;; user to change proposed topics and call
-		  ;; extraction by keybinding or to skip this step in
-		  ;; configuration
-		  :on-done (lambda (result)
-			     (ellama-extract-list-async
-			      "topics"
-			      ;; TODO: save data into ellama session
-			      (lambda (res)
-				(message "extracted topics: %s" res))
-			      result))))
+		  :on-done #'elisa-bind-topic-extraction))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
