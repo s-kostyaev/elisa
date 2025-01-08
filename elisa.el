@@ -1565,7 +1565,11 @@ Find similar quotes in COLLECTIONS and add it to context."
   (interactive)
   (ellama-extract-list-async
    "topics"
-   ;; TODO: save data into ellama session and start main loop
+   ;; TODO:
+   ;; - for each topic generate list of questions and extract it
+   ;; - save data into ellama session
+   ;;   (:elisa (:theme "string" :topics ((:topic "string" :questions ("string")))))
+   ;; - start main loop
    (lambda (res)
      (message "extracted topics: %s" res))
    (buffer-substring-no-properties (point-min) (point-max))))
