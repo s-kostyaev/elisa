@@ -1579,10 +1579,14 @@ Find similar quotes in COLLECTIONS and add it to context."
   (local-set-key (kbd "C-c C-c") #'elisa-research-extract-topics-async)
   (message "Press C-c C-c to start research"))
 
+(defvar elisa--research-theme nil
+  "Current research theme.")
+
 ;;;###autoload
 (defun elisa-research-generate-topics (theme)
   "Generate topics for research THEME."
   (interactive "sResearch topic: ")
+  (setq elisa--research-theme theme)
   (ellama-instant (format
 		   elisa-research-topics-generator-template
 		   theme)
