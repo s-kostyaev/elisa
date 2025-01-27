@@ -1563,7 +1563,7 @@ Find similar quotes in COLLECTIONS and add it to context."
 (defun elisa-research-extract-topics-async ()
   "Extract topics from current buffer asynchronously."
   (interactive)
-  (ellama-extract-list-async
+  (ellama-extract-string-list-async
    "topics"
    ;; TODO:
    ;; - for each topic generate list of questions and extract it
