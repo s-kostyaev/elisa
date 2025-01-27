@@ -1358,7 +1358,7 @@ It does nothing if buffer file not inside one of existing collections."
 	  (cl-remove col elisa-enabled-collections :test #'string=))))
 
 ;;;###autoload
-(defun elisa-disble-all-collections ()
+(defun elisa-disable-all-collections ()
   "Disable all collections."
   (interactive)
   (mapc #'elisa-disable-collection elisa-enabled-collections))

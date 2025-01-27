@@ -195,7 +195,7 @@ Enable all collections.
 
 Disable collection.
 
-*** elisa-disble-all-collections
+*** elisa-disable-all-collections
 
 Disable all collections.
 
