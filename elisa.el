@@ -201,6 +201,21 @@ How to buy a pony?
   "Prompt template for prompt rewriting."
   :type 'string)
 
+(defcustom elisa-research-context-queries-generator-template
+  "<INSTRUCTIONS>
+Generate a list of search queries to gather context for research on
+provided topic. Each query should be a simple question or phrase
+targeting specific aspects like definitions, key concepts. Break
+complex topics into smaller parts focusing on fundamental concepts.
+Use straightforward language. Don't rush into topic, you need to help
+to find definitions and basic concepst only. Generate 1 to 3 queries.
+</INSTRUCTIONS>
+<TOPIC>
+%s
+</TOPIC>"
+  "Prompt template for queries generation to gather context for research."
+  :type 'string)
+
 (defcustom elisa-research-topics-generator-template
   "<INSTRUCTIONS>
 You are professional researcher. User will provide you a theme
