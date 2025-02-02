@@ -1159,7 +1159,7 @@ You can customize `elisa-searxng-url' to use non local instance."
 		    rowid (elisa-sqlite-escape chunk))))))))
 
 (defun elisa--web-search (prompt &optional collection)
-  "Search the web for PROMPT. Parse result to COLLECTION if provided.
+  "Search the web for PROMPT.  Parse result to COLLECTION if provided.
 Return sqlite query that extract data for adding to context."
   (let ((col (or collection prompt)))
     (sqlite-execute
