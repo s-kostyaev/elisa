@@ -117,14 +117,14 @@
 					    (make-llm-ollama
 					     :embedding-model "nomic-embed-text"))
   "Embeddings provider to generate embeddings."
-  :type '(sexp :validate 'llm-standard-provider-p))
+  :type '(sexp :validate llm-standard-provider-p))
 
 (defcustom elisa-chat-provider (progn (require 'llm-ollama)
 				      (make-llm-ollama
 				       :chat-model "sskostyaev/openchat:8k-rag"
 				       :embedding-model "nomic-embed-text"))
   "Chat provider."
-  :type '(sexp :validate 'llm-standard-provider-p))
+  :type '(sexp :validate llm-standard-provider-p))
 
 (defcustom elisa-db-directory (file-truename
 			       (file-name-concat
