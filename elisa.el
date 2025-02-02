@@ -1597,6 +1597,20 @@ Find similar quotes in COLLECTIONS and add it to context."
 (defvar elisa--research-theme nil
   "Current research theme.")
 
+(defun elisa-research-generate-context-queries (theme)
+  "Generate queries to fill context to begin research for THEME."
+  (ellama-instant (format elisa-research-context-queries-generator-template theme)
+		  :provider elisa-chat-provider
+		  :on-done (lambda (res)
+			     (ellama-extract-string-list-async
+			      "queries"
+			      ;; TODO: make search for each query and
+			      ;; add result to context before topics
+			      ;; generation
+			      (lambda (lst)
+				(message "extracted queries: %s" lst))
+			      res))))
+
 ;;;###autoload
 (defun elisa-research-generate-topics (theme)
   "Generate topics for research THEME."
