@@ -1158,25 +1158,26 @@ You can customize `elisa-searxng-url' to use non local instance."
 	    (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
 		    rowid (elisa-sqlite-escape chunk))))))))
 
-(defun elisa--web-search (prompt)
-  "Search the web for PROMPT.
+(defun elisa--web-search (prompt &optional collection)
+  "Search the web for PROMPT. Parse result to COLLECTION if provided.
 Return sqlite query that extract data for adding to context."
-  (sqlite-execute
-   elisa-db
-   (format
-    "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
-    (elisa-sqlite-escape prompt)))
-  (let* ((collection-id (caar (sqlite-select
-			       elisa-db
-			       (format
-				"SELECT rowid FROM collections WHERE name = '%s';"
-				(elisa-sqlite-escape prompt)))))
-	 (urls (funcall elisa-web-search-function prompt))
-	 (collected-pages 0))
-    (dolist (url urls)
-      (when (<= collected-pages elisa-web-pages-limit)
-	(elisa--parse-web-page collection-id url)
-	(cl-incf collected-pages)))))
+  (let ((col (or collection prompt)))
+    (sqlite-execute
+     elisa-db
+     (format
+      "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
+      (elisa-sqlite-escape col)))
+    (let* ((collection-id (caar (sqlite-select
+				 elisa-db
+				 (format
+				  "SELECT rowid FROM collections WHERE name = '%s';"
+				  (elisa-sqlite-escape col)))))
+	   (urls (funcall elisa-web-search-function prompt))
+	   (collected-pages 0))
+      (dolist (url urls)
+	(when (<= collected-pages elisa-web-pages-limit)
+	  (elisa--parse-web-page collection-id url)
+	  (cl-incf collected-pages))))))
 
 (defun elisa--rewrite-prompt (prompt action)
   "Rewrite PROMPT if `elisa-prompt-rewriting-enabled'.
