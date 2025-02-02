@@ -483,7 +483,8 @@ Return list of vectors."
     (if (and elisa-batch-embeddings-enabled
 	     (member 'embeddings-batch (llm-capabilities provider)))
 	(let ((batches (seq-partition chunks elisa-batch-size)))
-	  (flatten-list (mapcar (lambda (batch) (llm-batch-embeddings provider batch)) batches)))
+	  (flatten-list (mapcar (lambda (batch) (llm-batch-embeddings provider (vconcat batch)))
+				batches)))
       (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
 
 (defun elisa-parse-info-manual (name collection-name)
