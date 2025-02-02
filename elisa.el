@@ -1218,37 +1218,43 @@ Call ACTION with new prompt."
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
   (elisa--async-do
-   (lambda () (let* ((raw-ids (flatten-tree (sqlite-select elisa-db query)))
-		     (ids (if elisa-reranker-enabled
-			      (elisa-rerank prompt raw-ids)
-			    (take elisa-limit raw-ids))))
-		(when ids
-		  (sqlite-select
-		   elisa-db
-		   (format
-		    "SELECT k.name, d.path, d.data
-FROM data AS d
-LEFT JOIN kinds k ON k.rowid = d.kind_id
-WHERE d.rowid in %s;"
-		    (elisa-sqlite-format-int-list ids))))))
+   (lambda () (elisa--retrieve-ids query prompt))
    (lambda (result)
-     (if result (mapc
-		 (lambda (row)
-		   (when-let ((kind (cl-first row))
-			      (path (cl-second row))
-			      (text (cl-third row)))
-		     (pcase kind
-		       ("web"
-			(ellama-context-add-webpage-quote-noninteractive path path text))
-		       ("file"
-			(ellama-context-add-file-quote-noninteractive path text))
-		       ("info"
-			(ellama-context-add-info-node-quote-noninteractive path text)))))
-		 result)
+     (if result
+         (mapc (lambda (row) (elisa--add-data-to-context row)) result)
        (ellama-context-add-text "No related documents found."))
      (ellama-chat
       (format elisa-chat-prompt-template prompt)
       nil :provider elisa-chat-provider))))
+
+(defun elisa--add-data-to-context (row)
+  "Add data from ROW to the context."
+  (when-let ((kind (cl-first row))
+             (path (cl-second row))
+             (text (cl-third row)))
+    (pcase kind
+      ("web"
+       (ellama-context-add-webpage-quote-noninteractive path path text))
+      ("file"
+       (ellama-context-add-file-quote-noninteractive path text))
+      ("info"
+       (ellama-context-add-info-node-quote-noninteractive path text)))))
+
+(defun elisa--retrieve-ids (query prompt)
+  "Retrieve IDs based on QUERY and PROMPT."
+  (let* ((raw-ids (flatten-tree (sqlite-select elisa-db query)))
+	 (ids (if elisa-reranker-enabled
+		  (elisa-rerank prompt raw-ids)
+		(take elisa-limit raw-ids))))
+    (when ids
+      (sqlite-select
+       elisa-db
+       (format
+	"SELECT k.name, d.path, d.data
+	FROM data AS d
+	LEFT JOIN kinds k ON k.rowid = d.kind_id
+	WHERE d.rowid in %s;"
+	(elisa-sqlite-format-int-list ids))))))
 
 (defun elisa--info-valid-p (name)
   "Return NAME if info is valid."
