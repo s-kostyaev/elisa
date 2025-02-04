@@ -1634,11 +1634,6 @@ Find similar quotes in COLLECTIONS and add it to context."
      (message "extracted topics: %s" res))
    (buffer-substring-no-properties (point-min) (point-max))))
 
-(defun elisa-bind-topic-extraction ()
-  "Bind topic extraction."
-  (local-set-key (kbd "C-c C-r") #'elisa-research-extract-topics-async)
-  (message "Press C-c C-r to start research"))
-
 (defvar elisa--research-theme nil
   "Current research theme.")
 
@@ -1667,7 +1662,7 @@ Find similar quotes in COLLECTIONS and add it to context."
 		elisa-research-topics-generator-template
 		theme)
 	       :provider elisa-chat-provider
-	       :on-done #'elisa-bind-topic-extraction))
+	       :on-done #'elisa-research-extract-topics-async))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
