@@ -1136,31 +1136,34 @@ You can customize `elisa-searxng-url' to use non local instance."
   (let ((kind-id (caar (sqlite-select
 			elisa-db "SELECT rowid FROM kinds WHERE name = 'web';"))))
     (message "collecting data from %S..." url)
-    (dolist (chunk (elisa-extact-webpage-chunks url))
-      (let* ((hash (secure-hash 'sha256 chunk))
-	      (embedding (llm-embedding elisa-embeddings-provider chunk))
-	      (rowid
-	       (if-let ((rowid (caar (sqlite-select
-				      elisa-db
-				      (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
-		   nil
-		 (sqlite-execute
-		  elisa-db
-		  (format
-		   "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
-		   kind-id collection-id url hash (elisa-sqlite-escape chunk)))
-		 (caar (sqlite-select
-			elisa-db
-			(format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
-	 (when rowid
-	   (sqlite-execute
-	    elisa-db
-	    (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
-		    rowid (elisa-vector-to-sqlite embedding)))
-	   (sqlite-execute
-	    elisa-db
-	    (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
-		    rowid (elisa-sqlite-escape chunk))))))))
+    (if (string-suffix-p ".pdf" url)
+	;; FIXME:
+	(message "do something with pdf")
+      (dolist (chunk (elisa-extact-webpage-chunks url))
+	(let* ((hash (secure-hash 'sha256 chunk))
+	       (embedding (llm-embedding elisa-embeddings-provider chunk))
+	       (rowid
+		(if-let ((rowid (caar (sqlite-select
+				       elisa-db
+				       (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
+		    nil
+		  (sqlite-execute
+		   elisa-db
+		   (format
+		    "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
+		    kind-id collection-id url hash (elisa-sqlite-escape chunk)))
+		  (caar (sqlite-select
+			 elisa-db
+			 (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
+	  (when rowid
+	    (sqlite-execute
+	     elisa-db
+	     (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
+		     rowid (elisa-vector-to-sqlite embedding)))
+	    (sqlite-execute
+	     elisa-db
+	     (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
+		     rowid (elisa-sqlite-escape chunk)))))))))
 
 (defun elisa--web-search (prompt &optional collection)
   "Search the web for PROMPT.  Parse result to COLLECTION if provided.
