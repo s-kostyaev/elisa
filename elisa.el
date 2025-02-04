@@ -1215,14 +1215,22 @@ Call ACTION with new prompt."
       prompt (list prompt)
       (lambda (query) (elisa-retrieve-ask query prompt))))))
 
-(defun elisa-retrieve-ask (query prompt)
-  "Retrieve data with QUERY and ask elisa for PROMPT."
+(defun elisa-retrieve-and-call-callback (query prompt callback)
+  "Retrieve data with QUERY, PROMPT and call CALLBACK with the result."
   (elisa--async-do
    (lambda () (elisa--retrieve-ids query prompt))
    (lambda (result)
      (if result
          (mapc (lambda (row) (elisa--add-data-to-context row)) result)
        (ellama-context-add-text "No related documents found."))
+     (funcall callback))))
+
+(defun elisa-retrieve-ask (query prompt)
+  "Retrieve data with QUERY and ask elisa for PROMPT."
+  (elisa-retrieve-and-call-callback
+   query
+   prompt
+   (lambda ()
      (ellama-chat
       (format elisa-chat-prompt-template prompt)
       nil :provider elisa-chat-provider))))
