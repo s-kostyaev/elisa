@@ -1620,8 +1620,8 @@ Find similar quotes in COLLECTIONS and add it to context."
   (interactive)
   (elisa--async-do 'elisa-recalculate-embeddings))
 
-(defun elisa-research-extract-topics-async ()
-  "Extract topics from current buffer asynchronously."
+(defun elisa-research-extract-topics-async (text)
+  "Extract topics from TEXT asynchronously."
   (interactive)
   (ellama-extract-string-list-async
    "topics"
@@ -1632,16 +1632,12 @@ Find similar quotes in COLLECTIONS and add it to context."
    ;; - start main loop
    (lambda (res)
      (message "extracted topics: %s" res))
-   (buffer-substring-no-properties (point-min) (point-max))))
-
-(defvar elisa--research-theme nil
-  "Current research theme.")
+   text))
 
 ;;;###autoload
-(defun elisa-research-generate-context-queries (theme)
-  "Generate queries to fill context to begin research for THEME."
+(defun elisa-research (theme)
+  "Research for THEME."
   (interactive "sResearch topic: ")
-  (setq elisa--research-theme theme)
   (ellama-instant (format elisa-research-context-queries-generator-template theme)
 		  :provider elisa-chat-provider
 		  :on-done (lambda (res)
