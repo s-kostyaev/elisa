@@ -1215,6 +1215,25 @@ Call ACTION with new prompt."
       prompt (list prompt)
       (lambda (query) (elisa-retrieve-ask query prompt))))))
 
+(defun elisa--research-fill-context (list on-done)
+  "Search the web for every prompt in LIST and fill relevant data to context.
+Call ON-DONE function after that."
+  (message "searching the web for context")
+  (if (not list)
+      (funcall on-done)
+    (let ((prompt (car list))
+	  (remaining (cdr list)))
+      (elisa--async-do
+       (lambda () (elisa--web-search prompt))
+       (lambda (_)
+	 (elisa-find-similar
+	  prompt (list prompt)
+	  (lambda (query) (elisa-retrieve-and-call-callback
+			   query
+			   prompt
+			   (lambda ()
+			     (elisa--research-fill-context remaining on-done))))))))))
+
 (defun elisa-retrieve-and-call-callback (query prompt callback)
   "Retrieve data with QUERY, PROMPT and call CALLBACK with the result."
   (elisa--async-do
