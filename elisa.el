@@ -1636,36 +1636,38 @@ Find similar quotes in COLLECTIONS and add it to context."
 
 (defun elisa-bind-topic-extraction ()
   "Bind topic extraction."
-  (local-set-key (kbd "C-c C-c") #'elisa-research-extract-topics-async)
-  (message "Press C-c C-c to start research"))
+  (local-set-key (kbd "C-c C-r") #'elisa-research-extract-topics-async)
+  (message "Press C-c C-r to start research"))
 
 (defvar elisa--research-theme nil
   "Current research theme.")
 
+;;;###autoload
 (defun elisa-research-generate-context-queries (theme)
   "Generate queries to fill context to begin research for THEME."
+  (interactive "sResearch topic: ")
+  (setq elisa--research-theme theme)
   (ellama-instant (format elisa-research-context-queries-generator-template theme)
 		  :provider elisa-chat-provider
 		  :on-done (lambda (res)
 			     (ellama-extract-string-list-async
 			      "queries"
-			      ;; TODO: make search for each query and
-			      ;; add result to context before topics
-			      ;; generation
 			      (lambda (lst)
-				(message "extracted queries: %s" lst))
+				(elisa--research-fill-context
+				 lst
+				 (lambda ()
+				   (elisa-research-generate-topics theme))))
 			      res))))
 
 ;;;###autoload
 (defun elisa-research-generate-topics (theme)
   "Generate topics for research THEME."
   (interactive "sResearch topic: ")
-  (setq elisa--research-theme theme)
-  (ellama-instant (format
-		   elisa-research-topics-generator-template
-		   theme)
-		  :provider elisa-chat-provider
-		  :on-done #'elisa-bind-topic-extraction))
+  (ellama-chat (format
+		elisa-research-topics-generator-template
+		theme)
+	       :provider elisa-chat-provider
+	       :on-done #'elisa-bind-topic-extraction))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
