@@ -942,6 +942,14 @@ When FORCE parse even if already parsed."
 
 (defvar eww-accept-content-types)
 
+(defun elisa-search-on (prompt site)
+  "Search on SITE for PROMPT using duckduckgo."
+  (elisa-search-duckduckgo (format "%s site:%s" prompt site)))
+
+(defun elisa-search-arxiv (prompt)
+  "Search for PROMPT on arxiv.org."
+  (elisa-search-on prompt "arxiv.org"))
+
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
   (require 'eww)
