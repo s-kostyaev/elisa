@@ -318,6 +318,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Supported complex document file extensions."
   :type '(repeat string))
 
+(defcustom elisa-supported-complex-document-mime-types '("application/x-ibooks+zip" "application/epub+zip" "application/x-mspublisher" "application/x-tika-msoffice" "application/vnd.ms-excel" "application/sldworks" "application/x-tika-msworks-spreadsheet" "application/vnd.ms-powerpoint" "application/x-tika-msoffice-embedded; format=ole10_native" "application/vnd.ms-project" "application/x-tika-ooxml-protected" "application/msword" "application/vnd.ms-outlook" "application/vnd.visio" "application/vnd.ms-excel.sheet.macroenabled.12" "application/vnd.ms-powerpoint.presentation.macroenabled.12" "application/vnd.openxmlformats-officedocument.spreadsheetml.template" "application/vnd.openxmlformats-officedocument.wordprocessingml.document" "application/vnd.openxmlformats-officedocument.presentationml.template" "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" "application/vnd.openxmlformats-officedocument.presentationml.presentation" "application/vnd.ms-excel.addin.macroenabled.12" "application/vnd.ms-word.document.macroenabled.12" "application/vnd.ms-excel.template.macroenabled.12" "application/vnd.openxmlformats-officedocument.wordprocessingml.template" "application/vnd.ms-powerpoint.slideshow.macroenabled.12" "application/vnd.ms-powerpoint.addin.macroenabled.12" "application/vnd.ms-word.template.macroenabled.12" "application/x-tika-ooxml" "application/vnd.openxmlformats-officedocument.presentationml.slideshow" "application/x-vnd.oasis.opendocument.graphics-template" "application/vnd.sun.xml.writer" "application/x-vnd.oasis.opendocument.text" "application/x-vnd.oasis.opendocument.text-web" "application/x-vnd.oasis.opendocument.spreadsheet-template" "application/vnd.oasis.opendocument.formula-template" "application/vnd.oasis.opendocument.presentation" "application/vnd.oasis.opendocument.image-template" "application/x-vnd.oasis.opendocument.graphics" "application/vnd.oasis.opendocument.chart-template" "application/vnd.oasis.opendocument.presentation-template" "application/x-vnd.oasis.opendocument.image-template" "application/vnd.oasis.opendocument.formula" "application/x-vnd.oasis.opendocument.image" "application/vnd.oasis.opendocument.spreadsheet-template" "application/x-vnd.oasis.opendocument.chart-template" "application/x-vnd.oasis.opendocument.formula" "application/vnd.oasis.opendocument.spreadsheet" "application/vnd.oasis.opendocument.text-web" "application/vnd.oasis.opendocument.text-template" "application/vnd.oasis.opendocument.text" "application/x-vnd.oasis.opendocument.formula-template" "application/x-vnd.oasis.opendocument.spreadsheet" "application/x-vnd.oasis.opendocument.chart" "application/vnd.oasis.opendocument.text-master" "application/x-vnd.oasis.opendocument.text-master" "application/x-vnd.oasis.opendocument.text-template" "application/vnd.oasis.opendocument.graphics" "application/vnd.oasis.opendocument.graphics-template" "application/x-vnd.oasis.opendocument.presentation" "application/vnd.oasis.opendocument.image" "application/x-vnd.oasis.opendocument.presentation-template" "application/vnd.oasis.opendocument.chart" "application/pdf" "application/rtf" "application/x-fictionbook+xml")
+  "Supported complex document mime types."
+  :type '(repeat string))
+
 (defcustom elisa-batch-embeddings-enabled nil
   "Enable batch embeddings if supported."
   :type 'boolean)
@@ -330,10 +334,19 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Force synchronous execution."
   :type 'boolean)
 
+(defun elisa-get-mime-type (url)
+  "Return mime type for URL."
+  (alist-get 'content-type
+	     (plz-response-headers
+	      (plz 'head url :as 'response))))
+
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
-  (cl-find (file-name-extension path)
-	   elisa-supported-complex-document-extensions :test #'string=))
+  (if (elisa-url-p path)
+      (cl-find (elisa-get-mime-type path)
+	       elisa-supported-complex-document-mime-types :test #'string=)
+    (cl-find (file-name-extension path)
+	     elisa-supported-complex-document-extensions :test #'string=)))
 
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system.
@@ -1000,10 +1013,17 @@ When FORCE parse even if already parsed."
 		       (forward-line)))
 		   (buffer-substring-no-properties (point-min) (point-max)))))
 
+(defun elisa-url-p (s)
+  "Check if S is an url."
+  (not (not (url-host (url-generic-parse-url s)))))
+
 (defun elisa-parse-with-tika-buffer (file)
   "Parse FILE with tika."
-  (let* ((url (format "%s/tika" (string-trim-right elisa-tika-url "/")))
-	 (buf (plz 'put url :body (list 'file file) :as 'buffer))
+  (let* ((new-file (if (elisa-url-p file)
+		       (plz 'get file :as 'file)
+		     file))
+	 (url (format "%s/tika" (string-trim-right elisa-tika-url "/")))
+	 (buf (plz 'put url :body (list 'file new-file) :as 'buffer))
 	 (shr-use-fonts nil)
 	 (shr-width (- ellama-long-lines-length 5))
 	 (data (with-current-buffer buf
@@ -1144,9 +1164,8 @@ You can customize `elisa-searxng-url' to use non local instance."
   (let ((kind-id (caar (sqlite-select
 			elisa-db "SELECT rowid FROM kinds WHERE name = 'web';"))))
     (message "collecting data from %S..." url)
-    (if (string-suffix-p ".pdf" url)
-	;; FIXME:
-	(message "do something with pdf")
+    (if (elisa-supported-complex-document-p url)
+	(elisa-parse-file collection-id url)
       (dolist (chunk (elisa-extact-webpage-chunks url))
 	(let* ((hash (secure-hash 'sha256 chunk))
 	       (embedding (llm-embedding elisa-embeddings-provider chunk))
