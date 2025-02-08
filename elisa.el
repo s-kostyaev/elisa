@@ -1302,15 +1302,48 @@ Call ON-DONE function after that."
        (ellama-context-add-text "No related documents found."))
      (funcall callback))))
 
+;;;###autoload
+(defun elisa-research-continue ()
+  "Continue current research."
+  (interactive)
+  (let* ((session (with-current-buffer
+		      (ellama-get-session-buffer ellama--current-session-id)
+		    ellama--current-session))
+	 (research-data (plist-get (ellama-session-extra session) :elisa))
+	 (topics (plist-get research-data :topics))
+	 (topic (car topics))
+	 (question (car (plist-get topic :questions))))
+    (elisa-web-search question)))
+
+(defun elisa-research-finish-step (response)
+  "Finish research step.  Handle RESPONSE."
+  ;; TODO:
+  ;; - [ ] extract open questions
+  ;; - [ ] update session information
+  ;; - [ ] Call next step
+  (message "step finish: %s" response))
+
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
   (elisa-retrieve-and-call-callback
    query
    prompt
    (lambda ()
-     (ellama-chat
-      (format elisa-chat-prompt-template prompt)
-      nil :provider elisa-chat-provider))))
+     (if-let* ((session (with-current-buffer
+			    (ellama-get-session-buffer ellama--current-session-id)
+			  ellama--current-session))
+	       (research-data (plist-get (ellama-session-extra session) :elisa))
+	       (theme (plist-get research-data :theme))
+	       (topics (plist-get research-data :topics))
+	       (topic (car topics))
+	       (other-topics (cdr topics))
+	       (topic-str (plist-get topic :topic)))
+	 (ellama-chat
+	  (format elisa-research-question-prompt-template theme topic-str prompt)
+	  nil :provider elisa-chat-provider :on-done #'elisa-research-finish-step)
+       (ellama-chat
+	(format elisa-chat-prompt-template prompt)
+	nil :provider elisa-chat-provider)))))
 
 (defun elisa--add-data-to-context (row)
   "Add data from ROW to the context."
@@ -1677,11 +1710,6 @@ Set extracted topics to ellama session data."
   (interactive)
   (ellama-extract-string-list-async
    "topics"
-   ;; TODO:
-   ;; - [ ] for each topic generate list of questions and extract it
-   ;; - [x] save data into ellama session
-   ;;   (:elisa (:theme "string" :topics ((:topic "string" :questions ("string")))))
-   ;; - [ ] start main loop
    (lambda (res)
      (let ((session-data `(:elisa (:theme ,elisa--research-theme
 					  :topics ,(mapcar (lambda (topic)
@@ -1691,6 +1719,8 @@ Set extracted topics to ellama session data."
 				       (ellama-get-session-buffer ellama--current-session-id)
 				     ellama--current-session))
 	     session-data)
+       (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+	 (ellama--save-session))
        (elisa-generate-questions)))
    text))
 
@@ -1712,14 +1742,16 @@ Set extracted topics to ellama session data."
 			    (ellama-extract-string-list-async
 			     "questions"
 			     (lambda (questions)
-			       ;; TODO: process every question
 			       (let* ((topic `(:topic ,topic-str :questions ,questions))
 				      (session-data `(:elisa (:theme ,elisa--research-theme
 								     :topics ,(cons topic other-topics)))))
 				 (setf (ellama-session-extra (with-current-buffer
 								 (ellama-get-session-buffer ellama--current-session-id)
 							       ellama--current-session))
-				       session-data)))
+				       session-data)
+				 (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+				   (ellama--save-session))
+				 (elisa-web-search (car questions))))
 			     res)))))
 
 (defvar elisa--research-theme nil)
