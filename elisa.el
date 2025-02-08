@@ -232,7 +232,7 @@ research and wider theme coverage.
   "<INSTRUCTIONS>
 You are professional researcher. User will provide you a theme
 and a topic for research. You need to generate list of questions
-for search to cover this topic. Focus on topic.
+for search to cover this topic. Focus on topic. DO NOT COVER OTHER TOPICS.
 </INSTRUCTIONS>
 <THEME>
 %s
@@ -336,15 +336,16 @@ If set, all quotes with similarity less than threshold will be filtered out."
 
 (defun elisa-get-mime-type (url)
   "Return mime type for URL."
-  (alist-get 'content-type
-	     (plz-response-headers
-	      (plz 'head url :as 'response))))
+  (ignore-errors (alist-get 'content-type
+			    (plz-response-headers
+			     (plz 'head url :as 'response)))))
 
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
   (if (elisa-url-p path)
-      (cl-find (elisa-get-mime-type path)
-	       elisa-supported-complex-document-mime-types :test #'string=)
+      (when-let ((mime-type (elisa-get-mime-type path)))
+	(cl-find mime-type
+		 elisa-supported-complex-document-mime-types :test #'string=))
     (cl-find (file-name-extension path)
 	     elisa-supported-complex-document-extensions :test #'string=)))
 
@@ -1167,21 +1168,21 @@ You can customize `elisa-searxng-url' to use non local instance."
     (if (elisa-supported-complex-document-p url)
 	(elisa-parse-file collection-id url)
       (dolist (chunk (elisa-extact-webpage-chunks url))
-	(let* ((hash (secure-hash 'sha256 chunk))
-	       (embedding (llm-embedding elisa-embeddings-provider chunk))
-	       (rowid
-		(if-let ((rowid (caar (sqlite-select
-				       elisa-db
-				       (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
-		    nil
-		  (sqlite-execute
-		   elisa-db
-		   (format
-		    "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
-		    kind-id collection-id url hash (elisa-sqlite-escape chunk)))
-		  (caar (sqlite-select
-			 elisa-db
-			 (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
+	(when-let* ((hash (secure-hash 'sha256 chunk))
+		    (embedding (ignore-errors (llm-embedding elisa-embeddings-provider chunk)))
+		    (rowid
+		     (if-let ((rowid (caar (sqlite-select
+					    elisa-db
+					    (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
+			 nil
+		       (sqlite-execute
+			elisa-db
+			(format
+			 "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
+			 kind-id collection-id url hash (elisa-sqlite-escape chunk)))
+		       (caar (sqlite-select
+			      elisa-db
+			      (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
 	  (when rowid
 	    (sqlite-execute
 	     elisa-db
@@ -1659,20 +1660,52 @@ Set extracted topics to ellama session data."
    ;;   (:elisa (:theme "string" :topics ((:topic "string" :questions ("string")))))
    ;; - [ ] start main loop
    (lambda (res)
-     (let ((session-data `(:elisa (:theme ,(buffer-name)
-					  :topics (,(mapcar (lambda (topic)
-                                                              `(:topic ,topic :questions nil))
-							    res))))))
+     (let ((session-data `(:elisa (:theme ,elisa--research-theme
+					  :topics ,(mapcar (lambda (topic)
+                                                             `(:topic ,topic :questions nil))
+							   res)))))
        (setf (ellama-session-extra (with-current-buffer
 				       (ellama-get-session-buffer ellama--current-session-id)
 				     ellama--current-session))
-	     session-data)))
+	     session-data)
+       (elisa-generate-questions)))
    text))
+
+(defun elisa-generate-questions ()
+  "Generate questions for current topic in current research."
+  (let* ((session (with-current-buffer
+		      (ellama-get-session-buffer ellama--current-session-id)
+		    ellama--current-session))
+	 (research-data (plist-get (ellama-session-extra session) :elisa))
+	 (theme (plist-get research-data :theme))
+	 (topics (plist-get research-data :topics))
+	 (topic (car topics))
+	 (other-topics (cdr topics))
+	 (topic-str (plist-get topic :topic)))
+    (ellama-chat (format elisa-research-questions-generator-template theme topic-str)
+		 nil
+		 :provider elisa-chat-provider
+		 :on-done (lambda (res)
+			    (ellama-extract-string-list-async
+			     "questions"
+			     (lambda (questions)
+			       ;; TODO: process every question
+			       (let* ((topic `(:topic ,topic-str :questions ,questions))
+				      (session-data `(:elisa (:theme ,elisa--research-theme
+								     :topics ,(cons topic other-topics)))))
+				 (setf (ellama-session-extra (with-current-buffer
+								 (ellama-get-session-buffer ellama--current-session-id)
+							       ellama--current-session))
+				       session-data)))
+			     res)))))
+
+(defvar elisa--research-theme nil)
 
 ;;;###autoload
 (defun elisa-research (theme)
   "Research for THEME."
   (interactive "sResearch topic: ")
+  (setq elisa--research-theme theme)
   (ellama-instant (format elisa-research-context-queries-generator-template theme)
 		  :provider elisa-chat-provider
 		  :on-done (lambda (res)
@@ -1692,6 +1725,7 @@ Set extracted topics to ellama session data."
   (ellama-chat (format
 		elisa-research-topics-generator-template
 		theme)
+	       nil
 	       :provider elisa-chat-provider
 	       :on-done #'elisa-research-extract-topics-async))
 
