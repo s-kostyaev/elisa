@@ -1648,17 +1648,25 @@ Find similar quotes in COLLECTIONS and add it to context."
   (elisa--async-do 'elisa-recalculate-embeddings))
 
 (defun elisa-research-extract-topics-async (text)
-  "Extract topics from TEXT asynchronously."
+  "Extract topics from TEXT asynchronously.
+Set extracted topics to ellama session data."
   (interactive)
   (ellama-extract-string-list-async
    "topics"
    ;; TODO:
-   ;; - for each topic generate list of questions and extract it
-   ;; - save data into ellama session
+   ;; - [ ] for each topic generate list of questions and extract it
+   ;; - [x] save data into ellama session
    ;;   (:elisa (:theme "string" :topics ((:topic "string" :questions ("string")))))
-   ;; - start main loop
+   ;; - [ ] start main loop
    (lambda (res)
-     (message "extracted topics: %s" res))
+     (let ((session-data `(:elisa (:theme ,(buffer-name)
+					  :topics (,(mapcar (lambda (topic)
+                                                              `(:topic ,topic :questions nil))
+							    res))))))
+       (setf (ellama-session-extra (with-current-buffer
+				       (ellama-get-session-buffer ellama--current-session-id)
+				     ellama--current-session))
+	     session-data)))
    text))
 
 ;;;###autoload
