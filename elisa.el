@@ -178,6 +178,29 @@ inserted at the end and all this result prompt will be sent to
 LLM together with context."
   :type 'string)
 
+(defcustom elisa-research-question-prompt-template
+  "<INSTRUCTIONS>
+You are professional search agent. \
+Answer question based on context above. \
+If you can answer it partially do it. \
+Provide list of open questions if any. \
+Say \"not enough data\" if you can't answer user \
+query based on provided context.
+ </INSTRUCTIONS>
+<THEME>
+%s
+</THEME>
+<TOPIC>
+%s
+</TOPIC>
+<QUESTION>
+%s
+</QUESTION>"
+  "Research prompt template.
+Contains instructions to LLM to be more focused on data in
+context, be able to say \"I don't know\" etc."
+  :type 'string)
+
 (defcustom elisa-rewrite-prompt-template
   "<INSTRUCTIONS>
 You are professional search agent. With given context and user
