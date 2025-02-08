@@ -1317,11 +1317,31 @@ Call ON-DONE function after that."
 
 (defun elisa-research-finish-step (response)
   "Finish research step.  Handle RESPONSE."
-  ;; TODO:
-  ;; - [ ] extract open questions
-  ;; - [ ] update session information
-  ;; - [ ] Call next step
-  (message "step finish: %s" response))
+  (ellama-extract-string-list-async
+   "open questions"
+   (lambda (open-questions)
+     (let* ((session (with-current-buffer
+			 (ellama-get-session-buffer ellama--current-session-id)
+		       ellama--current-session))
+	    (research-data (plist-get (ellama-session-extra session) :elisa))
+	    (topics (plist-get research-data :topics))
+	    (topic (car topics))
+	    (old-questions (plist-get topic :questions))
+	    (reversed-questions (reverse (cdr old-questions)))
+	    (questions (reverse (dolist (q open-questions)
+				  (cl-pushnew
+				   q
+				   reversed-questions
+				   :test #'ellama-semantic-similar-p)))))
+       ;;TODO: update session information
+       
+       (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+	 (ellama--save-session))
+       ;; TODO: call next step:
+       ;; - if no questions -> generate topic report -> next topic
+       ;; - if no topics -> generate main report (based on topic reports)
+       ))
+   response))
 
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
