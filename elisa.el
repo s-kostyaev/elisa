@@ -1324,17 +1324,25 @@ Call ON-DONE function after that."
 			 (ellama-get-session-buffer ellama--current-session-id)
 		       ellama--current-session))
 	    (research-data (plist-get (ellama-session-extra session) :elisa))
+	    (theme (plist-get research-data :theme))
 	    (topics (plist-get research-data :topics))
 	    (topic (car topics))
+	    (other-topics (cdr topics))
+	    (topic-str (plist-get topic :topic))
 	    (old-questions (plist-get topic :questions))
 	    (reversed-questions (reverse (cdr old-questions)))
 	    (questions (reverse (dolist (q open-questions)
 				  (cl-pushnew
 				   q
 				   reversed-questions
-				   :test #'ellama-semantic-similar-p)))))
-       ;;TODO: update session information
-       
+				   :test #'ellama-semantic-similar-p))))
+	    (session-data `(:elisa (:theme ,theme
+					   :topics ,(concat `(:topic ,topic-str :questions ,questions)
+							    ,other-topics)))))
+       (setf (ellama-session-extra (with-current-buffer
+				       (ellama-get-session-buffer ellama--current-session-id)
+				     ellama--current-session))
+	     session-data)
        (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
 	 (ellama--save-session))
        ;; TODO: call next step:
