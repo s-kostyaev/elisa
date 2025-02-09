@@ -1355,10 +1355,20 @@ Topic: %s"
 	     session-data)
        (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
 	 (ellama--save-session))
-       ;; TODO: call next step:
-       ;; - if no questions -> generate topic report -> next topic
-       ;; - if no topics -> generate main report (based on topic reports)
-       ))
+       (if (not new-topics)
+	   (progn
+	     ;; TODO: write topic report generation
+	     (message "generate report: %s" topic-str)
+	     ;; TODO: write theme report generation
+	     (message "generate report: %s" theme)
+	     (message "show report to user")
+	     (message "research for \"%s\" done" theme))
+	 (if (not questions)
+	     (progn
+	       ;; TODO: write topic report generation
+	       (message "generate report: %s" topic-str)
+	       (elisa-research-continue))
+	   (elisa-research-continue)))))
    response))
 
 (defun elisa-retrieve-ask (query prompt)
