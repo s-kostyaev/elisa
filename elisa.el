@@ -1331,12 +1331,18 @@ Call ON-DONE function after that."
 	    (topic-str (plist-get topic :topic))
 	    (old-questions (plist-get topic :questions))
 	    (reversed-questions (reverse (cdr old-questions)))
+	    (testfn (ellama-make-semantic-similar-p-with-context
+		     (format
+		      "Research.
+Theme: %s
+Topic: %s"
+		      theme topic-str)))
 	    (questions (reverse (progn
 				  (dolist (q open-questions)
 				    (cl-pushnew
 				     q
 				     reversed-questions
-				     :test #'ellama-semantic-similar-p))
+				     :test testfn))
 				  reversed-questions)))
 	    (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
 					    other-topics)
