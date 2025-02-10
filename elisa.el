@@ -1302,6 +1302,41 @@ Call ON-DONE function after that."
        (ellama-context-add-text "No related documents found."))
      (funcall callback))))
 
+(defun elisa--extract-topic-content (topic)
+  "Extract TOPIC content from current research session."
+  (let* ((buf (ellama-get-session-buffer ellama--current-session-id))
+	 (content (with-current-buffer buf
+		    (save-mark-and-excursion
+		      (save-match-data
+			(goto-char (point-min))
+			(search-forward (format "<TOPIC>
+%s
+</TOPIC>" topic))
+			(search-backward (concat
+					  (ellama-get-nick-prefix-for-mode)
+					  " "
+					  ellama-user-nick
+					  ":"))
+			(buffer-substring-no-properties (point) (point-max)))))))
+    (if (with-current-buffer buf
+	  (derived-mode-p 'org-mode))
+	(ellama-convert-org-to-md content)
+      content)))
+
+(defconst elisa--extract-link-regexp "^\\[.+\\](\\(.+\\)) \\[.+\\](.+)$"
+  "Extract link regexp.")
+
+(defun elisa--extract-links (text)
+  "Extract links from TEXT."
+  (with-temp-buffer
+    (save-match-data
+      (insert text)
+      (goto-char (point-min))
+      (let ((res))
+	(while (search-forward-regexp elisa--extract-link-regexp nil t)
+	  (cl-pushnew (match-string-no-properties 1) res :test #'string=))
+	(reverse res)))))
+
 ;;;###autoload
 (defun elisa-research-continue ()
   "Continue current research."
@@ -1337,6 +1372,7 @@ Call ON-DONE function after that."
 Theme: %s
 Topic: %s"
 		      theme topic-str)))
+	    ;; TODO: make questions filling async
 	    (questions (reverse (progn
 				  (dolist (q open-questions)
 				    (cl-pushnew
