@@ -1341,13 +1341,46 @@ Call ON-DONE function after that."
   "Create sources list from LINKS."
   (format "Sources:
 %s" (string-join
-	    (let ((i 1))
-	      (mapcar (lambda (link)
-			(prog1
-			    (format "%s. %s" i link)
-			  (cl-incf i)))
-		      links))
-	    "\n")))
+     (let ((i 1))
+       (mapcar (lambda (link)
+		 (prog1
+		     (format "%s. %s" i link)
+		   (cl-incf i)))
+	       links))
+     "\n")))
+
+(defun elisa--generate-topic-report (theme topic content sources)
+  "Generate TOPIC report based on provided CONTENT and SOURCES.
+TOPIC is a part of THEME."
+  (ellama-instant
+   (format "<INSTRUCTIONS>
+Create a detailed report on the specified research topic using the
+provided research log as your primary reference and the sources list.
+Include links to all cited sources, formatted as [N], where N
+corresponds to the source number.
+</INSTRUCTIONS>
+<TOPIC>
+%s
+</TOPIC>
+<SOURCES>
+%s
+</SOURCES>
+<LOG>
+%s
+</LOG>" topic sources content)
+   :provider elisa-chat-provider
+   :on-done (lambda (report)
+	      (let* ((dir (file-name-concat
+			   elisa-db-directory
+			   "research"
+			   theme))
+		     (file (file-name-concat dir (concat topic ".org"))))
+		(make-directory dir
+				t)
+		(with-current-buffer (find-file-noselect file t)
+		  (insert (ellama--translate-markdown-to-org-filter report))
+		  (save-buffer)
+		  (display-buffer (current-buffer)))))))
 
 ;;;###autoload
 (defun elisa-research-continue ()
@@ -1405,16 +1438,20 @@ Topic: %s"
 	 (ellama--save-session))
        (if (not new-topics)
 	   (progn
-	     ;; TODO: write topic report generation
-	     (message "generate report: %s" topic-str)
+	     (let* ((content (elisa--extract-topic-content topic-str))
+		    (links (elisa--extract-links content))
+		    (sources (elisa--create-sources-list links)))
+	       (elisa--generate-topic-report theme topic-str content sources))
 	     ;; TODO: write theme report generation
 	     (message "generate report: %s" theme)
 	     (message "show report to user")
 	     (message "research for \"%s\" done" theme))
 	 (if (not questions)
 	     (progn
-	       ;; TODO: write topic report generation
-	       (message "generate report: %s" topic-str)
+	       (let* ((content (elisa--extract-topic-content topic-str))
+		      (links (elisa--extract-links content))
+		      (sources (elisa--create-sources-list links)))
+		 (elisa--generate-topic-report theme topic-str content sources))
 	       (elisa-research-continue))
 	   (elisa-research-continue)))))
    response))
