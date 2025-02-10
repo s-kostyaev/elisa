@@ -1337,6 +1337,18 @@ Call ON-DONE function after that."
 	  (cl-pushnew (match-string-no-properties 1) res :test #'string=))
 	(reverse res)))))
 
+(defun elisa--create-sources-list (links)
+  "Create sources list from LINKS."
+  (format "Sources:
+%s" (string-join
+	    (let ((i 1))
+	      (mapcar (lambda (link)
+			(prog1
+			    (format "%s. %s" i link)
+			  (cl-incf i)))
+		      links))
+	    "\n")))
+
 ;;;###autoload
 (defun elisa-research-continue ()
   "Continue current research."
