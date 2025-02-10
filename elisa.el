@@ -201,6 +201,32 @@ Contains instructions to LLM to be more focused on data in
 context, be able to say \"I don't know\" etc."
   :type 'string)
 
+(defcustom elisa-research-question-filter-template
+  "<INSTRUCTIONS>
+Keep a focused list of research questions. Rate each question on
+relevance and importance from 0 (not relevant/important) to 10 (very
+relevant/important), based on the current theme and topic.
+ </INSTRUCTIONS>
+<THEME>
+%s
+</THEME>
+<TOPIC>
+%s
+</TOPIC>
+<QUESTIONS>
+%s
+</QUESTIONS>"
+  "Research question filter prompt template."
+  :type 'string)
+
+(defcustom elisa-research-focus-threshold 14
+  "Research Focus Threshold.
+Value ranges from 0 to 20 to configure the level of research focus.
+A value of 0 indicates an infinitely broad research scope, while a value
+of 20 signifies highly focused research on the most relevant and
+important questions."
+  :type 'integer)
+
 (defcustom elisa-rewrite-prompt-template
   "<INSTRUCTIONS>
 You are professional search agent. With given context and user
@@ -1395,6 +1421,46 @@ corresponds to the source number.
 	 (question (car (plist-get topic :questions))))
     (elisa-web-search question)))
 
+(defun elisa--filter-questions (theme topic questions)
+  "Filter QUESTIONS by importance and relevance to THEME and TOPIC."
+  (mapcar
+   (lambda (el) (plist-get el :question))
+   (cl-remove-if
+    (lambda (el)
+      (< (+ (plist-get el :relevance)
+	    (plist-get el :importance))
+	 elisa-research-focus-threshold))
+    (plist-get
+     (json-parse-string
+      (llm-chat elisa-chat-provider
+		(llm-make-chat-prompt
+		 (format elisa-research-question-filter-template
+			 theme
+			 topic
+			 (string-join questions
+				      "\n"))
+		 :response-format
+		 '(:type object :properties
+			 (:checks
+			  (:description
+			   "Checks for every question"
+			   :type array
+			   :items (:type
+				   object
+				   :properties
+				   (:question
+				    (:type string)
+				    :relevance (:description
+						"Relevance to the topic (0-10)"
+						:type integer)
+				    :importance (:description
+						 "Significance to the topic (0-10)"
+						 :type integer))
+				   :required ["question" "relevance" "importance"])))
+			 :required ["checks"])))
+      :object-type 'plist)
+     :checks))))
+
 (defun elisa-research-finish-step (response)
   "Finish research step.  Handle RESPONSE."
   (ellama-extract-string-list-async
@@ -1418,13 +1484,16 @@ Theme: %s
 Topic: %s"
 		      theme topic-str)))
 	    ;; TODO: make questions filling async
-	    (questions (reverse (progn
-				  (dolist (q open-questions)
-				    (cl-pushnew
-				     q
-				     reversed-questions
-				     :test testfn))
-				  reversed-questions)))
+	    (questions (elisa--filter-questions
+			theme
+			topic-str
+			(reverse (progn
+				   (dolist (q open-questions)
+				     (cl-pushnew
+				      q
+				      reversed-questions
+				      :test testfn))
+				   reversed-questions))))
 	    (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
 					    other-topics)
 			  other-topics))
