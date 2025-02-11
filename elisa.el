@@ -1475,39 +1475,39 @@ corresponds to the source number.
   (ellama-extract-string-list-async
    "open questions"
    (lambda (open-questions)
-     (let* ((session (with-current-buffer
-			 (ellama-get-session-buffer ellama--current-session-id)
-		       ellama--current-session))
-	    (research-data (plist-get (ellama-session-extra session) :elisa))
-	    (theme (plist-get research-data :theme))
-	    (topics (plist-get research-data :topics))
-	    (topic (car topics))
-	    (other-topics (cdr topics))
-	    (topic-str (plist-get topic :topic))
-	    (old-questions (plist-get topic :questions))
-	    (reversed-questions (reverse (cdr old-questions)))
-	    (testfn (ellama-make-semantic-similar-p-with-context
-		     (format
-		      "Research.
+     (when-let* ((session (with-current-buffer
+			      (ellama-get-session-buffer ellama--current-session-id)
+			    ellama--current-session))
+		 (research-data (plist-get (ellama-session-extra session) :elisa))
+		 (theme (plist-get research-data :theme))
+		 (topics (plist-get research-data :topics))
+		 (topic (car topics))
+		 (other-topics (cdr topics))
+		 (topic-str (plist-get topic :topic))
+		 (old-questions (plist-get topic :questions))
+		 (reversed-questions (reverse (cdr old-questions)))
+		 (testfn (ellama-make-semantic-similar-p-with-context
+			  (format
+			   "Research.
 Theme: %s
 Topic: %s"
-		      theme topic-str)))
-	    ;; TODO: make questions filling async
-	    (questions (elisa--filter-questions
-			theme
-			topic-str
-			(reverse (progn
-				   (dolist (q open-questions)
-				     (cl-pushnew
-				      q
-				      reversed-questions
-				      :test testfn))
-				   reversed-questions))))
-	    (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
-					    other-topics)
-			  other-topics))
-	    (session-data `(:elisa (:theme ,theme
-					   :topics ,new-topics))))
+			   theme topic-str)))
+		 ;; TODO: make questions filling async
+		 (questions (elisa--filter-questions
+			     theme
+			     topic-str
+			     (reverse (progn
+					(dolist (q open-questions)
+					  (cl-pushnew
+					   q
+					   reversed-questions
+					   :test testfn))
+					reversed-questions))))
+		 (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
+						 other-topics)
+			       other-topics))
+		 (session-data `(:elisa (:theme ,theme
+						:topics ,new-topics))))
        (setf (ellama-session-extra (with-current-buffer
 				       (ellama-get-session-buffer ellama--current-session-id)
 				     ellama--current-session))
