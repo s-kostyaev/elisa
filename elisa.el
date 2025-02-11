@@ -1301,12 +1301,19 @@ Call ACTION with new prompt."
 (defun elisa--web-search-internal (prompt)
   "Search the web for PROMPT."
   (message "searching the web")
-  (elisa--async-do
-   (lambda () (elisa--web-search prompt))
-   (lambda (_)
-     (elisa-find-similar
-      prompt (list prompt)
-      (lambda (query) (elisa-retrieve-ask query prompt))))))
+  (let* ((session-id ellama--current-session-id)
+	 (session (when session-id
+		    (with-current-buffer
+			(ellama-get-session-buffer session-id)
+		      ellama--current-session)))
+	 (research-data (when session (plist-get (ellama-session-extra session) :elisa)))
+	 (theme (when research-data (plist-get research-data :theme))))
+    (elisa--async-do
+     (lambda () (elisa--web-search prompt theme))
+     (lambda (_)
+       (elisa-find-similar
+	prompt (list (or theme prompt))
+	(lambda (query) (elisa-retrieve-ask query prompt)))))))
 
 (defun elisa--research-fill-context (lst on-done)
   "Search the web for every prompt in LST and fill relevant data to context.
@@ -1514,6 +1521,7 @@ Topic: %s"
 	     session-data)
        (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
 	 (ellama--save-session))
+       (ellama-context-reset)
        (if (not new-topics)
 	   (progn
 	     (let* ((content (elisa--extract-topic-content topic-str))
