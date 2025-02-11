@@ -585,16 +585,25 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Filter out empty CHUNKS."
   (cl-remove-if #'elisa-string-empty-p chunks))
 
+(defun elisa--fix-unicode (text)
+  "Convert non-unicode codepoints to unicode in TEXT."
+  (if (multibyte-string-p text)
+      text
+    (concat (mapcar (lambda (ch)
+		      (decode-char 'unicode ch))
+		    text))))
+
 (defun elisa-embeddings (chunks)
   "Calculate embeddings for CHUNKS.
 Return list of vectors."
-  (let ((provider elisa-embeddings-provider))
+  (let ((encoded-chunks (mapcar #'elisa--fix-unicode chunks))
+	(provider elisa-embeddings-provider))
     (if (and elisa-batch-embeddings-enabled
 	     (member 'embeddings-batch (llm-capabilities provider)))
-	(let ((batches (seq-partition chunks elisa-batch-size)))
+	(let ((batches (seq-partition encoded-chunks elisa-batch-size)))
 	  (flatten-list (mapcar (lambda (batch) (llm-batch-embeddings provider (vconcat batch)))
 				batches)))
-      (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
+      (mapcar (lambda (chunk) (llm-embedding provider chunk)) encoded-chunks))))
 
 (defun elisa-parse-info-manual (name collection-name)
   "Parse info manual with NAME and save index to COLLECTION-NAME."
@@ -1531,9 +1540,11 @@ Topic: %s"
    query
    prompt
    (lambda ()
-     (if-let* ((session (with-current-buffer
-			    (ellama-get-session-buffer ellama--current-session-id)
-			  ellama--current-session))
+     (if-let* ((session-id ellama--current-session-id)
+	       (session (when session-id
+			  (with-current-buffer
+			      (ellama-get-session-buffer session-id)
+			    ellama--current-session)))
 	       (research-data (plist-get (ellama-session-extra session) :elisa))
 	       (theme (plist-get research-data :theme))
 	       (topics (plist-get research-data :topics))
