@@ -1993,7 +1993,7 @@ Set extracted topics to ellama session data."
   (ellama-chat (format
 		elisa-research-topics-generator-template
 		theme)
-	       nil
+	       t
 	       :provider elisa-chat-provider
 	       :on-done #'elisa-research-extract-topics-async))
 
