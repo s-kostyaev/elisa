@@ -219,11 +219,11 @@ relevant/important), based on the current theme and topic.
   "Research question filter prompt template."
   :type 'string)
 
-(defcustom elisa-research-focus-threshold 14
-  "Research Focus Threshold.
-Value ranges from 0 to 20 to configure the level of research focus.
+(defcustom elisa-research-focus-percent 80
+  "Research Focus Percent.
+Value ranges from 0 to 100 to configure the level of research focus.
 A value of 0 indicates an infinitely broad research scope, while a value
-of 20 signifies highly focused research on the most relevant and
+of 100 signifies highly focused research on the most relevant and
 important questions."
   :type 'integer)
 
@@ -1436,9 +1436,9 @@ corresponds to the source number.
    (lambda (el) (plist-get el :question))
    (cl-remove-if
     (lambda (el)
-      (< (+ (plist-get el :relevance)
-	    (plist-get el :importance))
-	 elisa-research-focus-threshold))
+      (< (* 5 (+ (plist-get el :relevance)
+		 (plist-get el :importance)))
+	 elisa-research-focus-percent))
     (plist-get
      (json-parse-string
       (llm-chat elisa-chat-provider
