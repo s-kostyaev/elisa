@@ -1482,47 +1482,50 @@ corresponds to the source number.
   (ellama-extract-string-list-async
    "open questions"
    (lambda (open-questions)
-     (when-let* ((session (with-current-buffer
-			      (ellama-get-session-buffer ellama--current-session-id)
-			    ellama--current-session))
-		 (research-data (plist-get (ellama-session-extra session) :elisa))
-		 (theme (plist-get research-data :theme))
-		 (topics (plist-get research-data :topics))
-		 (topic (car topics))
-		 (other-topics (cdr topics))
-		 (topic-str (plist-get topic :topic))
-		 (old-questions (plist-get topic :questions))
-		 (reversed-questions (reverse (cdr old-questions)))
-		 (testfn (ellama-make-semantic-similar-p-with-context
-			  (format
-			   "Research.
+     (let* ((session (with-current-buffer
+			 (ellama-get-session-buffer ellama--current-session-id)
+		       ellama--current-session))
+	    (research-data (when session (plist-get (ellama-session-extra session) :elisa)))
+	    (theme (when research-data (plist-get research-data :theme)))
+	    (topics (when research-data (plist-get research-data :topics)))
+	    (topic (when topics (car topics)))
+	    (other-topics (when topics (cdr topics)))
+	    (topic-str (when topic (plist-get topic :topic)))
+	    (old-questions (when topic (plist-get topic :questions)))
+	    (reversed-questions (when old-questions (reverse (cdr old-questions))))
+	    (testfn (when topic-str (ellama-make-semantic-similar-p-with-context
+				     (format
+				      "Research.
 Theme: %s
 Topic: %s"
-			   theme topic-str)))
-		 ;; TODO: make questions filling async
-		 (questions (elisa--filter-questions
-			     theme
-			     topic-str
-			     (reverse (progn
-					(dolist (q open-questions)
-					  (cl-pushnew
-					   q
-					   reversed-questions
-					   :test testfn))
-					reversed-questions))))
-		 (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
-						 other-topics)
-			       other-topics))
-		 (session-data `(:elisa (:theme ,theme
-						:topics ,new-topics))))
-       (setf (ellama-session-extra (with-current-buffer
-				       (ellama-get-session-buffer ellama--current-session-id)
-				     ellama--current-session))
-	     session-data)
+				      theme topic-str))))
+	    ;; TODO: make questions filling async
+	    (questions (when (and topic-str open-questions)
+			 (elisa--filter-questions
+			  theme
+			  topic-str
+			  (reverse (progn
+				     (dolist (q open-questions)
+				       (cl-pushnew
+					q
+					reversed-questions
+					:test testfn))
+				     reversed-questions)))))
+	    (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
+					    other-topics)
+			  other-topics))
+	    (session-data `(:elisa (:theme ,theme
+					   :topics ,new-topics))))
+       (when session
+	 (setf (ellama-session-extra (with-current-buffer
+					 (ellama-get-session-buffer ellama--current-session-id)
+				       ellama--current-session))
+	       session-data))
        (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
 	 (ellama--save-session))
        (ellama-context-reset)
-       (if (not new-topics)
+       (if (and theme
+		(not new-topics))
 	   (progn
 	     (let* ((content (elisa--extract-topic-content topic-str))
 		    (links (elisa--extract-links content))
@@ -1532,14 +1535,15 @@ Topic: %s"
 	     (message "generate report: %s" theme)
 	     (message "show report to user")
 	     (message "research for \"%s\" done" theme))
-	 (if (not questions)
+	 (if (and theme
+		  (not questions))
 	     (progn
 	       (let* ((content (elisa--extract-topic-content topic-str))
 		      (links (elisa--extract-links content))
 		      (sources (elisa--create-sources-list links)))
 		 (elisa--generate-topic-report theme topic-str content sources))
 	       (elisa-research-continue))
-	   (elisa-research-continue)))))
+	   (when theme (elisa-research-continue))))))
    response))
 
 (defun elisa-retrieve-ask (query prompt)
