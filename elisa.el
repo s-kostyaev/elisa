@@ -1492,7 +1492,7 @@ corresponds to the source number.
 	    (other-topics (when topics (cdr topics)))
 	    (topic-str (when topic (plist-get topic :topic)))
 	    (old-questions (when topic (plist-get topic :questions)))
-	    (reversed-questions (when old-questions (reverse (cdr old-questions))))
+	    (reversed-questions (when old-questions (reverse old-questions)))
 	    (testfn (when topic-str (ellama-make-semantic-similar-p-with-context
 				     (format
 				      "Research.
@@ -1504,13 +1504,13 @@ Topic: %s"
 			 (elisa--filter-questions
 			  theme
 			  topic-str
-			  (reverse (progn
-				     (dolist (q open-questions)
-				       (cl-pushnew
-					q
-					reversed-questions
-					:test testfn))
-				     reversed-questions)))))
+			  (cdr (reverse (progn
+					  (dolist (q open-questions)
+					    (cl-pushnew
+					     q
+					     reversed-questions
+					     :test testfn))
+					  reversed-questions))))))
 	    (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
 					    other-topics)
 			  other-topics))
