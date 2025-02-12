@@ -1542,6 +1542,7 @@ Topic: %s"
 		      (links (elisa--extract-links content))
 		      (sources (elisa--create-sources-list links)))
 		 (elisa--generate-topic-report theme topic-str content sources))
+	       (elisa-generate-questions)
 	       (elisa-research-continue))
 	   (when theme (elisa-research-continue))))))
    response))
@@ -1929,6 +1930,8 @@ Find similar quotes in COLLECTIONS and add it to context."
   (interactive)
   (elisa--async-do 'elisa-recalculate-embeddings))
 
+(defvar elisa--research-theme nil)
+
 (defun elisa-research-extract-topics-async (text)
   "Extract topics from TEXT asynchronously.
 Set extracted topics to ellama session data."
@@ -1951,15 +1954,16 @@ Set extracted topics to ellama session data."
 
 (defun elisa-generate-questions ()
   "Generate questions for current topic in current research."
-  (let* ((session (with-current-buffer
-		      (ellama-get-session-buffer ellama--current-session-id)
-		    ellama--current-session))
-	 (research-data (plist-get (ellama-session-extra session) :elisa))
-	 (theme (plist-get research-data :theme))
-	 (topics (plist-get research-data :topics))
-	 (topic (car topics))
-	 (other-topics (cdr topics))
-	 (topic-str (plist-get topic :topic)))
+  (when-let* ((session-id ellama--current-session-id)
+	      (session (with-current-buffer
+			   (ellama-get-session-buffer session-id)
+			 ellama--current-session))
+	      (research-data (plist-get (ellama-session-extra session) :elisa))
+	      (theme (plist-get research-data :theme))
+	      (topics (plist-get research-data :topics))
+	      (topic (car topics))
+	      (other-topics (cdr topics))
+	      (topic-str (plist-get topic :topic)))
     (ellama-chat (format elisa-research-questions-generator-template theme topic-str)
 		 nil
 		 :provider elisa-chat-provider
@@ -1968,7 +1972,7 @@ Set extracted topics to ellama session data."
 			     "questions"
 			     (lambda (questions)
 			       (let* ((topic `(:topic ,topic-str :questions ,questions))
-				      (session-data `(:elisa (:theme ,elisa--research-theme
+				      (session-data `(:elisa (:theme ,theme
 								     :topics ,(cons topic other-topics)))))
 				 (setf (ellama-session-extra (with-current-buffer
 								 (ellama-get-session-buffer ellama--current-session-id)
@@ -1978,8 +1982,6 @@ Set extracted topics to ellama session data."
 				   (ellama--save-session))
 				 (elisa-web-search (car questions))))
 			     res)))))
-
-(defvar elisa--research-theme nil)
 
 ;;;###autoload
 (defun elisa-research (theme)
