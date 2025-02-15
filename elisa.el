@@ -1493,6 +1493,10 @@ corresponds to the source number.
 	    (topic-str (when topic (plist-get topic :topic)))
 	    (old-questions (when topic (plist-get topic :questions)))
 	    (reversed-questions (when old-questions (reverse old-questions)))
+	    (processed-questions (cons
+				  (car old-questions)
+				  (when research-data
+				    (plist-get research-data :processed-questions))))
 	    (testfn (when topic-str (ellama-make-semantic-similar-p-with-context
 				     (format
 				      "Research.
@@ -1500,12 +1504,16 @@ Theme: %s
 Topic: %s"
 				      theme topic-str))))
 	    ;; TODO: make questions filling async
-	    (questions (when (and topic-str open-questions)
+	    (filtered-open-questions (cl-remove-if
+				      (lambda (q)
+					(cl-member q processed-questions :test testfn))
+				      open-questions))
+	    (questions (when (and topic-str filtered-open-questions)
 			 (elisa--filter-questions
 			  theme
 			  topic-str
 			  (cdr (reverse (progn
-					  (dolist (q open-questions)
+					  (dolist (q filtered-open-questions)
 					    (cl-pushnew
 					     q
 					     reversed-questions
@@ -1515,7 +1523,8 @@ Topic: %s"
 					    other-topics)
 			  other-topics))
 	    (session-data `(:elisa (:theme ,theme
-					   :topics ,new-topics))))
+					   :topics ,new-topics
+					   :processed-questions ,processed-questions))))
        (when session
 	 (setf (ellama-session-extra (with-current-buffer
 					 (ellama-get-session-buffer ellama--current-session-id)
