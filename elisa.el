@@ -178,6 +178,55 @@ inserted at the end and all this result prompt will be sent to
 LLM together with context."
   :type 'string)
 
+(defcustom elisa-research-question-prompt-template
+  "<INSTRUCTIONS>
+You are professional search agent. \
+Answer question based on context above. \
+If you can answer it partially do it. \
+Provide list of open questions if any. \
+Say \"not enough data\" if you can't answer user \
+query based on provided context.
+ </INSTRUCTIONS>
+<THEME>
+%s
+</THEME>
+<TOPIC>
+%s
+</TOPIC>
+<QUESTION>
+%s
+</QUESTION>"
+  "Research prompt template.
+Contains instructions to LLM to be more focused on data in
+context, be able to say \"I don't know\" etc."
+  :type 'string)
+
+(defcustom elisa-research-question-filter-template
+  "<INSTRUCTIONS>
+Keep a focused list of research questions. Rate each question on
+relevance and importance from 0 (not relevant/important) to 10 (very
+relevant/important), based on the current theme and topic.
+ </INSTRUCTIONS>
+<THEME>
+%s
+</THEME>
+<TOPIC>
+%s
+</TOPIC>
+<QUESTIONS>
+%s
+</QUESTIONS>"
+  "Research question filter prompt template."
+  :type 'string)
+
+(defcustom elisa-research-focus-percent 80
+  "Research Focus Percent.
+Value ranges from 0 to 100 to configure the level of research focus.
+A value of 0 indicates an infinitely broad research scope, while a value
+of 100 signifies highly focused research on the most relevant and
+important questions."
+  :type 'integer)
+
 (defcustom elisa-rewrite-prompt-template
   "<INSTRUCTIONS>
 You are professional search agent. With given context and user
@@ -199,6 +248,48 @@ How to buy a pony?
 %s
 </USER_PROMPT>"
   "Prompt template for prompt rewriting."
+  :type 'string)
+
+(defcustom elisa-research-context-queries-generator-template
+  "<INSTRUCTIONS>
+Generate a list of search queries to gather context for research on
+provided topic. Each query should be a simple question or phrase
+targeting specific aspects like definitions, key concepts. Break
+complex topics into smaller parts focusing on fundamental concepts.
+Use straightforward language. Don't rush into topic, you need to help
+to find definitions and basic concepst only. Generate 1 to 3 queries.
+</INSTRUCTIONS>
+<TOPIC>
+%s
+</TOPIC>"
+  "Prompt template for queries generation to gather context for research."
+  :type 'string)
+
+(defcustom elisa-research-topics-generator-template
+  "<INSTRUCTIONS>
+You are professional researcher. User will provide you a theme
+for research. You need to generate list of topics for deeper
+research and wider theme coverage.
+</INSTRUCTIONS>
+<THEME>
+%s
+</THEME>"
+  "Prompt template for research topics generation."
+  :type 'string)
+
+(defcustom elisa-research-questions-generator-template
+  "<INSTRUCTIONS>
+You are professional researcher. User will provide you a theme
+and a topic for research. You need to generate list of questions
+for search to cover this topic. Focus on topic. DO NOT COVER OTHER TOPICS.
+</INSTRUCTIONS>
+<THEME>
+%s
+</THEME>
+<TOPIC>
+%s
+</TOPIC>"
+  "Prompt template for research questions generation."
   :type 'string)
 
 (defcustom elisa-tika-url "http://localhost:9998/"
@@ -276,6 +367,10 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Supported complex document file extensions."
   :type '(repeat string))
 
+(defcustom elisa-supported-complex-document-mime-types '("application/x-ibooks+zip" "application/epub+zip" "application/x-mspublisher" "application/x-tika-msoffice" "application/vnd.ms-excel" "application/sldworks" "application/x-tika-msworks-spreadsheet" "application/vnd.ms-powerpoint" "application/x-tika-msoffice-embedded; format=ole10_native" "application/vnd.ms-project" "application/x-tika-ooxml-protected" "application/msword" "application/vnd.ms-outlook" "application/vnd.visio" "application/vnd.ms-excel.sheet.macroenabled.12" "application/vnd.ms-powerpoint.presentation.macroenabled.12" "application/vnd.openxmlformats-officedocument.spreadsheetml.template" "application/vnd.openxmlformats-officedocument.wordprocessingml.document" "application/vnd.openxmlformats-officedocument.presentationml.template" "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" "application/vnd.openxmlformats-officedocument.presentationml.presentation" "application/vnd.ms-excel.addin.macroenabled.12" "application/vnd.ms-word.document.macroenabled.12" "application/vnd.ms-excel.template.macroenabled.12" "application/vnd.openxmlformats-officedocument.wordprocessingml.template" "application/vnd.ms-powerpoint.slideshow.macroenabled.12" "application/vnd.ms-powerpoint.addin.macroenabled.12" "application/vnd.ms-word.template.macroenabled.12" "application/x-tika-ooxml" "application/vnd.openxmlformats-officedocument.presentationml.slideshow" "application/x-vnd.oasis.opendocument.graphics-template" "application/vnd.sun.xml.writer" "application/x-vnd.oasis.opendocument.text" "application/x-vnd.oasis.opendocument.text-web" "application/x-vnd.oasis.opendocument.spreadsheet-template" "application/vnd.oasis.opendocument.formula-template" "application/vnd.oasis.opendocument.presentation" "application/vnd.oasis.opendocument.image-template" "application/x-vnd.oasis.opendocument.graphics" "application/vnd.oasis.opendocument.chart-template" "application/vnd.oasis.opendocument.presentation-template" "application/x-vnd.oasis.opendocument.image-template" "application/vnd.oasis.opendocument.formula" "application/x-vnd.oasis.opendocument.image" "application/vnd.oasis.opendocument.spreadsheet-template" "application/x-vnd.oasis.opendocument.chart-template" "application/x-vnd.oasis.opendocument.formula" "application/vnd.oasis.opendocument.spreadsheet" "application/vnd.oasis.opendocument.text-web" "application/vnd.oasis.opendocument.text-template" "application/vnd.oasis.opendocument.text" "application/x-vnd.oasis.opendocument.formula-template" "application/x-vnd.oasis.opendocument.spreadsheet" "application/x-vnd.oasis.opendocument.chart" "application/vnd.oasis.opendocument.text-master" "application/x-vnd.oasis.opendocument.text-master" "application/x-vnd.oasis.opendocument.text-template" "application/vnd.oasis.opendocument.graphics" "application/vnd.oasis.opendocument.graphics-template" "application/x-vnd.oasis.opendocument.presentation" "application/vnd.oasis.opendocument.image" "application/x-vnd.oasis.opendocument.presentation-template" "application/vnd.oasis.opendocument.chart" "application/pdf" "application/rtf" "application/x-fictionbook+xml")
+  "Supported complex document mime types."
+  :type '(repeat string))
+
 (defcustom elisa-batch-embeddings-enabled nil
   "Enable batch embeddings if supported."
   :type 'boolean)
@@ -284,10 +379,24 @@ If set, all quotes with similarity less than threshold will be filtered out."
   "Batch size to send to provider during batch embeddings calculation."
   :type 'integer)
 
+(defcustom elisa-force-sync nil
+  "Force synchronous execution."
+  :type 'boolean)
+
+(defun elisa-get-mime-type (url)
+  "Return mime type for URL."
+  (ignore-errors (alist-get 'content-type
+			    (plz-response-headers
+			     (plz 'head url :as 'response)))))
+
 (defun elisa-supported-complex-document-p (path)
   "Check if PATH contain supported complex document."
-  (cl-find (file-name-extension path)
-	   elisa-supported-complex-document-extensions :test #'string=))
+  (if (elisa-url-p path)
+      (when-let ((mime-type (elisa-get-mime-type path)))
+	(cl-find mime-type
+		 elisa-supported-complex-document-mime-types :test #'string=))
+    (cl-find (file-name-extension path)
+	     elisa-supported-complex-document-extensions :test #'string=)))
 
 (defun elisa-sqlite-vss-download-url ()
   "Generate sqlite vss download url based on current system.
@@ -476,16 +585,25 @@ FOREIGN KEY(collection_id) REFERENCES collections(rowid)
   "Filter out empty CHUNKS."
   (cl-remove-if #'elisa-string-empty-p chunks))
 
+(defun elisa--fix-unicode (text)
+  "Convert non-unicode codepoints to unicode in TEXT."
+  (if (multibyte-string-p text)
+      text
+    (concat (mapcar (lambda (ch)
+		      (decode-char 'unicode ch))
+		    text))))
+
 (defun elisa-embeddings (chunks)
   "Calculate embeddings for CHUNKS.
 Return list of vectors."
-  (let ((provider elisa-embeddings-provider))
+  (let ((encoded-chunks (mapcar #'elisa--fix-unicode chunks))
+	(provider elisa-embeddings-provider))
     (if (and elisa-batch-embeddings-enabled
 	     (member 'embeddings-batch (llm-capabilities provider)))
-	(let ((batches (seq-partition chunks elisa-batch-size)))
+	(let ((batches (seq-partition encoded-chunks elisa-batch-size)))
 	  (flatten-list (mapcar (lambda (batch) (llm-batch-embeddings provider (vconcat batch)))
 				batches)))
-      (mapcar (lambda (chunk) (llm-embedding provider chunk)) chunks))))
+      (mapcar (lambda (chunk) (llm-embedding provider chunk)) encoded-chunks))))
 
 (defun elisa-parse-info-manual (name collection-name)
   "Parse info manual with NAME and save index to COLLECTION-NAME."
@@ -896,6 +1014,14 @@ When FORCE parse even if already parsed."
 
 (defvar eww-accept-content-types)
 
+(defun elisa-search-on (prompt site)
+  "Search on SITE for PROMPT using duckduckgo."
+  (elisa-search-duckduckgo (format "%s site:%s" prompt site)))
+
+(defun elisa-search-arxiv (prompt)
+  "Search for PROMPT on arxiv.org."
+  (elisa-search-on prompt "arxiv.org"))
+
 (defun elisa-search-duckduckgo (prompt)
   "Search duckduckgo for PROMPT and return list of urls."
   (require 'eww)
@@ -946,10 +1072,17 @@ When FORCE parse even if already parsed."
 		       (forward-line)))
 		   (buffer-substring-no-properties (point-min) (point-max)))))
 
+(defun elisa-url-p (s)
+  "Check if S is an url."
+  (not (not (url-host (url-generic-parse-url s)))))
+
 (defun elisa-parse-with-tika-buffer (file)
   "Parse FILE with tika."
-  (let* ((url (format "%s/tika" (string-trim-right elisa-tika-url "/")))
-	 (buf (plz 'put url :body (list 'file file) :as 'buffer))
+  (let* ((new-file (if (elisa-url-p file)
+		       (plz 'get file :as 'file)
+		     file))
+	 (url (format "%s/tika" (string-trim-right elisa-tika-url "/")))
+	 (buf (plz 'put url :body (list 'file new-file) :as 'buffer))
 	 (shr-use-fonts nil)
 	 (shr-width (- ellama-long-lines-length 5))
 	 (data (with-current-buffer buf
@@ -1090,51 +1223,54 @@ You can customize `elisa-searxng-url' to use non local instance."
   (let ((kind-id (caar (sqlite-select
 			elisa-db "SELECT rowid FROM kinds WHERE name = 'web';"))))
     (message "collecting data from %S..." url)
-    (dolist (chunk (elisa-extact-webpage-chunks url))
-      (let* ((hash (secure-hash 'sha256 chunk))
-	      (embedding (llm-embedding elisa-embeddings-provider chunk))
-	      (rowid
-	       (if-let ((rowid (caar (sqlite-select
-				      elisa-db
-				      (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
-		   nil
-		 (sqlite-execute
-		  elisa-db
-		  (format
-		   "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
-		   kind-id collection-id url hash (elisa-sqlite-escape chunk)))
-		 (caar (sqlite-select
+    (if (elisa-supported-complex-document-p url)
+	(elisa-parse-file collection-id url)
+      (dolist (chunk (elisa-extact-webpage-chunks url))
+	(when-let* ((hash (secure-hash 'sha256 chunk))
+		    (embedding (ignore-errors (llm-embedding elisa-embeddings-provider chunk)))
+		    (rowid
+		     (if-let ((rowid (caar (sqlite-select
+					    elisa-db
+					    (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash)))))
+			 nil
+		       (sqlite-execute
 			elisa-db
-			(format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
-	 (when rowid
-	   (sqlite-execute
-	    elisa-db
-	    (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
-		    rowid (elisa-vector-to-sqlite embedding)))
-	   (sqlite-execute
-	    elisa-db
-	    (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
-		    rowid (elisa-sqlite-escape chunk))))))))
+			(format
+			 "INSERT INTO data(kind_id, collection_id, path, hash, data) VALUES (%s, %s, '%s', '%s', '%s');"
+			 kind-id collection-id url hash (elisa-sqlite-escape chunk)))
+		       (caar (sqlite-select
+			      elisa-db
+			      (format "SELECT rowid FROM data WHERE kind_id = %s AND collection_id = %s AND path = '%s' AND hash = '%s';" kind-id collection-id url hash))))))
+	  (when rowid
+	    (sqlite-execute
+	     elisa-db
+	     (format "INSERT INTO data_embeddings(rowid, embedding) VALUES (%s, %s);"
+		     rowid (elisa-vector-to-sqlite embedding)))
+	    (sqlite-execute
+	     elisa-db
+	     (format "INSERT INTO data_fts(rowid, data) VALUES (%s, '%s');"
+		     rowid (elisa-sqlite-escape chunk)))))))))
 
-(defun elisa--web-search (prompt)
-  "Search the web for PROMPT.
+(defun elisa--web-search (prompt &optional collection)
+  "Search the web for PROMPT.  Parse result to COLLECTION if provided.
 Return sqlite query that extract data for adding to context."
-  (sqlite-execute
-   elisa-db
-   (format
-    "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
-    (elisa-sqlite-escape prompt)))
-  (let* ((collection-id (caar (sqlite-select
-			       elisa-db
-			       (format
-				"SELECT rowid FROM collections WHERE name = '%s';"
-				(elisa-sqlite-escape prompt)))))
-	 (urls (funcall elisa-web-search-function prompt))
-	 (collected-pages 0))
-    (dolist (url urls)
-      (when (<= collected-pages elisa-web-pages-limit)
-	(elisa--parse-web-page collection-id url)
-	(cl-incf collected-pages)))))
+  (let ((col (or collection prompt)))
+    (sqlite-execute
+     elisa-db
+     (format
+      "INSERT INTO collections (name) VALUES ('%s') ON CONFLICT DO NOTHING;"
+      (elisa-sqlite-escape col)))
+    (let* ((collection-id (caar (sqlite-select
+				 elisa-db
+				 (format
+				  "SELECT rowid FROM collections WHERE name = '%s';"
+				  (elisa-sqlite-escape col)))))
+	   (urls (funcall elisa-web-search-function prompt))
+	   (collected-pages 0))
+      (dolist (url urls)
+	(when (<= collected-pages elisa-web-pages-limit)
+	  (elisa--parse-web-page collection-id url)
+	  (cl-incf collected-pages))))))
 
 (defun elisa--rewrite-prompt (prompt action)
   "Rewrite PROMPT if `elisa-prompt-rewriting-enabled'.
@@ -1165,47 +1301,313 @@ Call ACTION with new prompt."
 (defun elisa--web-search-internal (prompt)
   "Search the web for PROMPT."
   (message "searching the web")
+  (let* ((session-id ellama--current-session-id)
+	 (session (when session-id
+		    (with-current-buffer
+			(ellama-get-session-buffer session-id)
+		      ellama--current-session)))
+	 (research-data (when session (plist-get (ellama-session-extra session) :elisa)))
+	 (theme (when research-data (plist-get research-data :theme))))
+    (elisa--async-do
+     (lambda () (elisa--web-search prompt theme))
+     (lambda (_)
+       (elisa-find-similar
+	prompt (list (or theme prompt))
+	(lambda (query) (elisa-retrieve-ask query prompt)))))))
+
+(defun elisa--research-fill-context (lst on-done)
+  "Search the web for every prompt in LST and fill relevant data to context.
+Call ON-DONE function after that."
+  (message "searching the web for context")
+  (if (not lst)
+      (funcall on-done)
+    (let ((prompt (car lst))
+	  (remaining (cdr lst)))
+      (elisa--async-do
+       (lambda () (elisa--web-search prompt))
+       (lambda (_)
+	 (elisa-find-similar
+	  prompt (list prompt)
+	  (lambda (query) (elisa-retrieve-and-call-callback
+			   query
+			   prompt
+			   (lambda ()
+			     (elisa--research-fill-context remaining on-done))))))))))
+
+(defun elisa-retrieve-and-call-callback (query prompt callback)
+  "Retrieve data with QUERY, PROMPT and call CALLBACK with the result."
   (elisa--async-do
-   (lambda () (elisa--web-search prompt))
-   (lambda (_)
-     (elisa-find-similar
-      prompt (list prompt)
-      (lambda (query) (elisa-retrieve-ask query prompt))))))
+   (lambda () (elisa--retrieve-ids query prompt))
+   (lambda (result)
+     (if result
+         (mapc (lambda (row) (elisa--add-data-to-context row)) result)
+       (ellama-context-add-text "No related documents found."))
+     (funcall callback))))
+
+(defun elisa--extract-topic-content (topic)
+  "Extract TOPIC content from current research session."
+  (let* ((buf (ellama-get-session-buffer ellama--current-session-id))
+	 (content (with-current-buffer buf
+		    (save-mark-and-excursion
+		      (save-match-data
+			(goto-char (point-min))
+			(search-forward (format "<TOPIC>
+%s
+</TOPIC>" topic))
+			(search-backward (concat
+					  (ellama-get-nick-prefix-for-mode)
+					  " "
+					  ellama-user-nick
+					  ":"))
+			(buffer-substring-no-properties (point) (point-max)))))))
+    (if (with-current-buffer buf
+	  (derived-mode-p 'org-mode))
+	(ellama-convert-org-to-md content)
+      content)))
+
+(defconst elisa--extract-link-regexp "^\\[.+\\](\\(.+\\)) \\[.+\\](.+)$"
+  "Extract link regexp.")
+
+(defun elisa--extract-links (text)
+  "Extract links from TEXT."
+  (with-temp-buffer
+    (save-match-data
+      (insert text)
+      (goto-char (point-min))
+      (let ((res))
+	(while (search-forward-regexp elisa--extract-link-regexp nil t)
+	  (cl-pushnew (match-string-no-properties 1) res :test #'string=))
+	(reverse res)))))
+
+(defun elisa--create-sources-list (links)
+  "Create sources list from LINKS."
+  (format "Sources:
+%s" (string-join
+     (let ((i 1))
+       (mapcar (lambda (link)
+		 (prog1
+		     (format "%s. %s" i link)
+		   (cl-incf i)))
+	       links))
+     "\n")))
+
+(defun elisa--generate-topic-report (theme topic content sources)
+  "Generate TOPIC report based on provided CONTENT and SOURCES.
+TOPIC is a part of THEME."
+  (ellama-instant
+   (format "<INSTRUCTIONS>
+Create a detailed report on the specified research topic using the
+provided research log as your primary reference and the sources list.
+Include links to all cited sources, formatted as [N], where N
+corresponds to the source number.
+</INSTRUCTIONS>
+<TOPIC>
+%s
+</TOPIC>
+<SOURCES>
+%s
+</SOURCES>
+<LOG>
+%s
+</LOG>" topic sources content)
+   :provider elisa-chat-provider
+   :on-done (lambda (report)
+	      (let* ((dir (file-name-concat
+			   elisa-db-directory
+			   "research"
+			   theme))
+		     (file (file-name-concat dir (concat topic ".org"))))
+		(make-directory dir
+				t)
+		(with-current-buffer (find-file-noselect file t)
+		  (insert (ellama--translate-markdown-to-org-filter report))
+		  (save-buffer)
+		  (display-buffer (current-buffer)))))))
+
+;;;###autoload
+(defun elisa-research-continue ()
+  "Continue current research."
+  (interactive)
+  (let* ((session (with-current-buffer
+		      (ellama-get-session-buffer ellama--current-session-id)
+		    ellama--current-session))
+	 (research-data (plist-get (ellama-session-extra session) :elisa))
+	 (topics (plist-get research-data :topics))
+	 (topic (car topics))
+	 (question (car (plist-get topic :questions))))
+    (elisa-web-search question)))
+
+(defun elisa--filter-questions (theme topic questions)
+  "Filter QUESTIONS by importance and relevance to THEME and TOPIC."
+  (mapcar
+   (lambda (el) (plist-get el :question))
+   (cl-remove-if
+    (lambda (el)
+      (< (* 5 (+ (plist-get el :relevance)
+		 (plist-get el :importance)))
+	 elisa-research-focus-percent))
+    (plist-get
+     (json-parse-string
+      (llm-chat elisa-chat-provider
+		(llm-make-chat-prompt
+		 (format elisa-research-question-filter-template
+			 theme
+			 topic
+			 (string-join questions
+				      "\n"))
+		 :response-format
+		 '(:type object :properties
+			 (:checks
+			  (:description
+			   "Checks for every question"
+			   :type array
+			   :items (:type
+				   object
+				   :properties
+				   (:question
+				    (:type string)
+				    :relevance (:description
+						"Relevance to the topic (0-10)"
+						:type integer)
+				    :importance (:description
+						 "Significance to the topic (0-10)"
+						 :type integer))
+				   :required ["question" "relevance" "importance"])))
+			 :required ["checks"])))
+      :object-type 'plist)
+     :checks))))
+
+(defun elisa-research-finish-step (response)
+  "Finish research step.  Handle RESPONSE."
+  (ellama-extract-string-list-async
+   "open questions"
+   (lambda (open-questions)
+     (let* ((session (with-current-buffer
+			 (ellama-get-session-buffer ellama--current-session-id)
+		       ellama--current-session))
+	    (research-data (when session (plist-get (ellama-session-extra session) :elisa)))
+	    (theme (when research-data (plist-get research-data :theme)))
+	    (topics (when research-data (plist-get research-data :topics)))
+	    (topic (when topics (car topics)))
+	    (other-topics (when topics (cdr topics)))
+	    (topic-str (when topic (plist-get topic :topic)))
+	    (old-questions (when topic (plist-get topic :questions)))
+	    (reversed-questions (when old-questions (reverse old-questions)))
+	    (processed-questions (cons
+				  (car old-questions)
+				  (when research-data
+				    (plist-get research-data :processed-questions))))
+	    (testfn (when topic-str (ellama-make-semantic-similar-p-with-context
+				     (format
+				      "Research.
+Theme: %s
+Topic: %s"
+				      theme topic-str))))
+	    ;; TODO: make questions filling async
+	    (filtered-open-questions (cl-remove-if
+				      (lambda (q)
+					(cl-member q processed-questions :test testfn))
+				      open-questions))
+	    (questions (when (and topic-str filtered-open-questions)
+			 (elisa--filter-questions
+			  theme
+			  topic-str
+			  (cdr (reverse (progn
+					  (dolist (q filtered-open-questions)
+					    (cl-pushnew
+					     q
+					     reversed-questions
+					     :test testfn))
+					  reversed-questions))))))
+	    (new-topics (if questions (cons `(:topic ,topic-str :questions ,questions)
+					    other-topics)
+			  other-topics))
+	    (session-data `(:elisa (:theme ,theme
+					   :topics ,new-topics
+					   :processed-questions ,processed-questions))))
+       (when session
+	 (setf (ellama-session-extra (with-current-buffer
+					 (ellama-get-session-buffer ellama--current-session-id)
+				       ellama--current-session))
+	       session-data))
+       (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+	 (ellama--save-session))
+       (ellama-context-reset)
+       (if (and theme
+		(not new-topics))
+	   (progn
+	     (let* ((content (elisa--extract-topic-content topic-str))
+		    (links (elisa--extract-links content))
+		    (sources (elisa--create-sources-list links)))
+	       (elisa--generate-topic-report theme topic-str content sources))
+	     ;; TODO: write theme report generation
+	     (message "generate report: %s" theme)
+	     (message "show report to user")
+	     (message "research for \"%s\" done" theme))
+	 (if (and theme
+		  (not questions))
+	     (progn
+	       (let* ((content (elisa--extract-topic-content topic-str))
+		      (links (elisa--extract-links content))
+		      (sources (elisa--create-sources-list links)))
+		 (elisa--generate-topic-report theme topic-str content sources))
+	       (elisa-generate-questions)
+	       (elisa-research-continue))
+	   (when theme (elisa-research-continue))))))
+   response))
 
 (defun elisa-retrieve-ask (query prompt)
   "Retrieve data with QUERY and ask elisa for PROMPT."
-  (elisa--async-do
-   (lambda () (let* ((raw-ids (flatten-tree (sqlite-select elisa-db query)))
-		     (ids (if elisa-reranker-enabled
-			      (elisa-rerank prompt raw-ids)
-			    (take elisa-limit raw-ids))))
-		(when ids
-		  (sqlite-select
-		   elisa-db
-		   (format
-		    "SELECT k.name, d.path, d.data
-FROM data AS d
-LEFT JOIN kinds k ON k.rowid = d.kind_id
-WHERE d.rowid in %s;"
-		    (elisa-sqlite-format-int-list ids))))))
-   (lambda (result)
-     (if result (mapc
-		 (lambda (row)
-		   (when-let ((kind (cl-first row))
-			      (path (cl-second row))
-			      (text (cl-third row)))
-		     (pcase kind
-		       ("web"
-			(ellama-context-add-webpage-quote-noninteractive path path text))
-		       ("file"
-			(ellama-context-add-file-quote-noninteractive path text))
-		       ("info"
-			(ellama-context-add-info-node-quote-noninteractive path text)))))
-		 result)
-       (ellama-context-add-text "No related documents found."))
-     (ellama-chat
-      (format elisa-chat-prompt-template prompt)
-      nil :provider elisa-chat-provider))))
+  (elisa-retrieve-and-call-callback
+   query
+   prompt
+   (lambda ()
+     (if-let* ((session-id ellama--current-session-id)
+	       (session (when session-id
+			  (with-current-buffer
+			      (ellama-get-session-buffer session-id)
+			    ellama--current-session)))
+	       (research-data (plist-get (ellama-session-extra session) :elisa))
+	       (theme (plist-get research-data :theme))
+	       (topics (plist-get research-data :topics))
+	       (topic (car topics))
+	       (other-topics (cdr topics))
+	       (topic-str (plist-get topic :topic)))
+	 (ellama-chat
+	  (format elisa-research-question-prompt-template theme topic-str prompt)
+	  nil :provider elisa-chat-provider :on-done #'elisa-research-finish-step)
+       (ellama-chat
+	(format elisa-chat-prompt-template prompt)
+	nil :provider elisa-chat-provider)))))
+
+(defun elisa--add-data-to-context (row)
+  "Add data from ROW to the context."
+  (when-let ((kind (cl-first row))
+             (path (cl-second row))
+             (text (cl-third row)))
+    (pcase kind
+      ("web"
+       (ellama-context-add-webpage-quote-noninteractive path path text))
+      ("file"
+       (ellama-context-add-file-quote-noninteractive path text))
+      ("info"
+       (ellama-context-add-info-node-quote-noninteractive path text)))))
+
+(defun elisa--retrieve-ids (query prompt)
+  "Retrieve IDs based on QUERY and PROMPT."
+  (let* ((raw-ids (flatten-tree (sqlite-select elisa-db query)))
+	 (ids (if elisa-reranker-enabled
+		  (elisa-rerank prompt raw-ids)
+		(take elisa-limit raw-ids))))
+    (when ids
+      (sqlite-select
+       elisa-db
+       (format
+	"SELECT k.name, d.path, d.data
+	FROM data AS d
+	LEFT JOIN kinds k ON k.rowid = d.kind_id
+	WHERE d.rowid in %s;"
+	(elisa-sqlite-format-int-list ids))))))
 
 (defun elisa--info-valid-p (name)
   "Return NAME if info is valid."
@@ -1264,45 +1666,49 @@ WHERE d.rowid in %s;"
 (defun elisa--async-do (func &optional on-done)
   "Do FUNC asyncronously.
 Call ON-DONE callback with result as an argument after FUNC evaluation done."
-  (let* ((command real-this-command)
-	 (reporter (make-progress-reporter (if command
-					       (prin1-to-string command)
-					     "elisa async processing")))
-	 (timer (run-at-time t 0.2 (lambda () (progress-reporter-update reporter)))))
-    (async-start `(lambda ()
-		    ,(async-inject-variables "elisa-embeddings-provider")
-		    ,(async-inject-variables "elisa-db-directory")
-		    ,(async-inject-variables "elisa-find-executable")
-		    ,(async-inject-variables "elisa-tar-executable")
-		    ,(async-inject-variables "elisa-prompt-rewriting-enabled")
-		    ,(async-inject-variables "elisa-batch-embeddings-enabled")
-		    ,(async-inject-variables "elisa-batch-size")
-		    ,(async-inject-variables "elisa-rewrite-prompt-template")
-		    ,(async-inject-variables "elisa-semantic-split-function")
-		    ,(async-inject-variables "elisa-webpage-extraction-function")
-		    ,(async-inject-variables "elisa-supported-complex-document-extensions")
-		    ,(async-inject-variables "elisa-complex-file-extraction-function")
-		    ,(async-inject-variables "elisa-web-search-function")
-		    ,(async-inject-variables "elisa-tika-url")
-		    ,(async-inject-variables "elisa-searxng-url")
-		    ,(async-inject-variables "elisa-web-pages-limit")
-		    ,(async-inject-variables "elisa-breakpoint-threshold-amount")
-		    ,(async-inject-variables "elisa-pandoc-executable")
-		    ,(async-inject-variables "ellama-long-lines-length")
-		    ,(async-inject-variables "elisa-reranker-enabled")
-		    ,(async-inject-variables "elisa-sqlite-vector-path")
-		    ,(async-inject-variables "elisa-sqlite-vss-path")
-		    ,(async-inject-variables "load-path")
-		    ,(async-inject-variables "Info-directory-list")
-		    (require 'elisa)
-		    (,func))
-		 (lambda (res)
-		   (cancel-timer timer)
-		   (progress-reporter-done reporter)
-		   (sqlite-close elisa-db)
-		   (elisa--reopen-db)
-		   (when on-done
-		     (funcall on-done res))))))
+  (if elisa-force-sync
+      (if on-done
+	  (funcall on-done (funcall func))
+	(funcall func))
+    (let* ((command real-this-command)
+	   (reporter (make-progress-reporter (if command
+						 (prin1-to-string command)
+					       "elisa async processing")))
+	   (timer (run-at-time t 0.2 (lambda () (progress-reporter-update reporter)))))
+      (async-start `(lambda ()
+		      ,(async-inject-variables "elisa-embeddings-provider")
+		      ,(async-inject-variables "elisa-db-directory")
+		      ,(async-inject-variables "elisa-find-executable")
+		      ,(async-inject-variables "elisa-tar-executable")
+		      ,(async-inject-variables "elisa-prompt-rewriting-enabled")
+		      ,(async-inject-variables "elisa-batch-embeddings-enabled")
+		      ,(async-inject-variables "elisa-batch-size")
+		      ,(async-inject-variables "elisa-rewrite-prompt-template")
+		      ,(async-inject-variables "elisa-semantic-split-function")
+		      ,(async-inject-variables "elisa-webpage-extraction-function")
+		      ,(async-inject-variables "elisa-supported-complex-document-extensions")
+		      ,(async-inject-variables "elisa-complex-file-extraction-function")
+		      ,(async-inject-variables "elisa-web-search-function")
+		      ,(async-inject-variables "elisa-tika-url")
+		      ,(async-inject-variables "elisa-searxng-url")
+		      ,(async-inject-variables "elisa-web-pages-limit")
+		      ,(async-inject-variables "elisa-breakpoint-threshold-amount")
+		      ,(async-inject-variables "elisa-pandoc-executable")
+		      ,(async-inject-variables "ellama-long-lines-length")
+		      ,(async-inject-variables "elisa-reranker-enabled")
+		      ,(async-inject-variables "elisa-sqlite-vector-path")
+		      ,(async-inject-variables "elisa-sqlite-vss-path")
+		      ,(async-inject-variables "load-path")
+		      ,(async-inject-variables "Info-directory-list")
+		      (require 'elisa)
+		      (,func))
+		   (lambda (res)
+		     (cancel-timer timer)
+		     (progress-reporter-done reporter)
+		     (sqlite-close elisa-db)
+		     (elisa--reopen-db)
+		     (when on-done
+		       (funcall on-done res)))))))
 
 (defun elisa-extact-webpage-chunks (url)
   "Extract semantic chunks for webpage fetched from URL."
@@ -1532,6 +1938,87 @@ Find similar quotes in COLLECTIONS and add it to context."
   "Recalculate embeddings asynchronously."
   (interactive)
   (elisa--async-do 'elisa-recalculate-embeddings))
+
+(defvar elisa--research-theme nil)
+
+(defun elisa-research-extract-topics-async (text)
+  "Extract topics from TEXT asynchronously.
+Set extracted topics to ellama session data."
+  (interactive)
+  (ellama-extract-string-list-async
+   "topics"
+   (lambda (res)
+     (let ((session-data `(:elisa (:theme ,elisa--research-theme
+					  :topics ,(mapcar (lambda (topic)
+                                                             `(:topic ,topic :questions nil))
+							   res)))))
+       (setf (ellama-session-extra (with-current-buffer
+				       (ellama-get-session-buffer ellama--current-session-id)
+				     ellama--current-session))
+	     session-data)
+       (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+	 (ellama--save-session))
+       (elisa-generate-questions)))
+   text))
+
+(defun elisa-generate-questions ()
+  "Generate questions for current topic in current research."
+  (when-let* ((session-id ellama--current-session-id)
+	      (session (with-current-buffer
+			   (ellama-get-session-buffer session-id)
+			 ellama--current-session))
+	      (research-data (plist-get (ellama-session-extra session) :elisa))
+	      (theme (plist-get research-data :theme))
+	      (topics (plist-get research-data :topics))
+	      (topic (car topics))
+	      (other-topics (cdr topics))
+	      (topic-str (plist-get topic :topic)))
+    (ellama-chat (format elisa-research-questions-generator-template theme topic-str)
+		 nil
+		 :provider elisa-chat-provider
+		 :on-done (lambda (res)
+			    (ellama-extract-string-list-async
+			     "questions"
+			     (lambda (questions)
+			       (let* ((topic `(:topic ,topic-str :questions ,questions))
+				      (session-data `(:elisa (:theme ,theme
+								     :topics ,(cons topic other-topics)))))
+				 (setf (ellama-session-extra (with-current-buffer
+								 (ellama-get-session-buffer ellama--current-session-id)
+							       ellama--current-session))
+				       session-data)
+				 (with-current-buffer (ellama-get-session-buffer ellama--current-session-id)
+				   (ellama--save-session))
+				 (elisa-web-search (car questions))))
+			     res)))))
+
+;;;###autoload
+(defun elisa-research (theme)
+  "Research for THEME."
+  (interactive "sResearch topic: ")
+  (setq elisa--research-theme theme)
+  (ellama-instant (format elisa-research-context-queries-generator-template theme)
+		  :provider elisa-chat-provider
+		  :on-done (lambda (res)
+			     (ellama-extract-string-list-async
+			      "queries"
+			      (lambda (lst)
+				(elisa--research-fill-context
+				 lst
+				 (lambda ()
+				   (elisa-research-generate-topics theme))))
+			      res))))
+
+;;;###autoload
+(defun elisa-research-generate-topics (theme)
+  "Generate topics for research THEME."
+  (interactive "sResearch topic: ")
+  (ellama-chat (format
+		elisa-research-topics-generator-template
+		theme)
+	       t
+	       :provider elisa-chat-provider
+	       :on-done #'elisa-research-extract-topics-async))
 
 (provide 'elisa)
 ;;; elisa.el ends here.
